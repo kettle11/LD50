@@ -56,15 +56,6 @@ fn prepare_model_world(world: &mut World, scale: Vec3) {
     commands.clear();
 
     koi::flatten_world(world);
-
-    (|entities_with_mesh: Query<&mut Handle<Mesh>>| {
-        for m in entities_with_mesh.entities_and_components() {
-            commands.add_component(*m.0, Color::RED);
-            commands.add_component(*m.0, Collider::AttachedMesh);
-        }
-    })
-    .run(world);
-    commands.apply(world);
 }
 
 fn main() {
@@ -90,29 +81,55 @@ fn main() {
 
         spawn_skybox(world, "assets/venice_sunset.hdr");
 
+        // Setup the water plane
+        let water_material = (|materials: &mut Assets<Material>| {
+            materials.add(new_pbr_material(
+                Shader::PHYSICALLY_BASED_TRANSPARENT_DOUBLE_SIDED,
+                PBRProperties {
+                    roughness: 0.02,
+                    base_color: Color::new_from_bytes(7, 80, 97, 200),
+                    ..Default::default()
+                },
+            ))
+        })
+        .run(world);
+
+        world.spawn((
+            Transform::new().with_scale(Vec3::fill(1000000.)),
+            Mesh::PLANE,
+            water_material.clone(),
+            RenderFlags::DEFAULT.with_layer(RenderFlags::DO_NOT_CAST_SHADOWS),
+        ));
+
+        /*
         world.spawn((
             Transform::new()
                 .with_position(Vec3::Y * -200.0)
-                .with_scale(Vec3::fill(300.0)),
-            Collider::Cuboid(Vec3::fill(0.5)),
+                .with_scale(Vec3::fill(1000.0)),
+            // Collider::Cuboid(Vec3::fill(0.5)),
             Mesh::CUBE,
             Material::DEFAULT,
             Color::AZURE,
         ));
+        */
 
         let character_parent = world.spawn((
-            Transform::new().with_position(Vec3::Y * 30.0),
+            Transform::new().with_position(Vec3::Y * 10.0),
             Collider::Sphere(0.5),
             RigidBody {
                 kinematic: false,
                 can_rotate: (false, false, false),
                 ..Default::default()
             },
-            CharacterController,
+            CharacterController::new(),
             MouseLook::new(),
         ));
 
-        let camera = world.spawn((Transform::new().with_position(Vec3::Y * 1.0), Camera::new()));
+        let camera = world.spawn((
+            Transform::new().with_position(Vec3::Y * 1.0),
+            Camera::new(),
+            CharacterControllerCamera,
+        ));
         set_parent(world, Some(character_parent), camera);
 
         // Spawn a cube that we can control
@@ -130,7 +147,7 @@ fn main() {
 
         let mut standard_context = StandardContext::new(
             StandardStyle {
-                primary_text_color: Color::WHITE,
+                primary_text_color: Color::INTERNATIONAL_ORANGE,
                 primary_color: Color::BLACK.with_alpha(0.5),
                 padding: 12.,
                 ..Default::default()
@@ -139,21 +156,109 @@ fn main() {
             fonts,
         );
 
-        let mut ui = conditional(
-            |world: &mut World, _| world.get_singleton::<GameState>().game_mode == GameMode::Title,
-            center(text("The Last Sky Pirate").with_size(|_, _, _| 100.)),
-        );
+        let mut ui = stack((
+            conditional(
+                |world: &mut World, _| {
+                    world.get_singleton::<GameState>().game_mode == GameMode::Title
+                },
+                center(text("The Last Sky Pirate").with_size(|_, _, _| 100.)),
+            ),
+            conditional(
+                |world: &mut World, _| {
+                    world.get_singleton::<GameState>().game_mode != GameMode::Title
+                },
+                center(stack((
+                    rectangle(Vec2::fill(4.0)),
+                    fill(|_, _, _| Color::WHITE),
+                ))),
+            ),
+        ));
         world.spawn((Transform::new(), Camera::new_for_user_interface()));
 
         let worlds = world.get_singleton::<Assets<World>>();
-        let gltfs = [worlds.load_with_options(
-            "assets/boat.glb",
-            LoadWorldOptions {
-                run_on_world: Some(Box::new(|world: &mut World| {
-                    prepare_model_world(world, Vec3::fill(2.0))
-                })),
-            },
-        )];
+        let models = [
+            worlds.load_with_options(
+                "assets/boat.glb",
+                LoadWorldOptions {
+                    run_on_world: Some(Box::new(|world: &mut World| {
+                        prepare_model_world(world, Vec3::fill(2.0));
+                        let mut commands = Commands::new();
+                        (|entities_with_mesh: Query<&mut Handle<Mesh>>| {
+                            for m in entities_with_mesh.entities_and_components() {
+                                commands.add_component(*m.0, Color::RED);
+                                commands.add_component(*m.0, Collider::AttachedMeshConvex);
+                                commands.add_component(
+                                    *m.0,
+                                    RigidBody {
+                                        kinematic: false,
+                                        can_rotate: (true, true, true),
+                                        gravity_scale: 0.01,
+                                        linear_damping: 0.6,
+                                        angular_damping: 0.0,
+                                        velocity: Vec3::ZERO,
+                                        ..Default::default()
+                                    },
+                                );
+                            }
+                        })
+                        .run(world);
+                        commands.apply(world);
+                    })),
+                },
+            ),
+            worlds.load_with_options(
+                "assets/floating_island.glb",
+                LoadWorldOptions {
+                    run_on_world: Some(Box::new(|world: &mut World| {
+                        prepare_model_world(world, Vec3::fill(1.0));
+                        let mut commands = Commands::new();
+                        (|entities_with_mesh: Query<&mut Handle<Mesh>>| {
+                            for m in entities_with_mesh.entities_and_components() {
+                                commands.add_component(*m.0, Collider::AttachedMeshConvex);
+                                commands.add_component(
+                                    *m.0,
+                                    RigidBody {
+                                        kinematic: false,
+                                        can_rotate: (true, true, true),
+                                        gravity_scale: 0.0,
+                                        linear_damping: 0.6,
+                                        angular_damping: 0.0,
+                                        velocity: Vec3::ZERO,
+                                        ..Default::default()
+                                    },
+                                );
+                            }
+                        })
+                        .run(world);
+                        commands.apply(world);
+                    })),
+                },
+            ),
+            worlds.load_with_options(
+                "assets/barrel.glb",
+                LoadWorldOptions {
+                    run_on_world: Some(Box::new(|world: &mut World| {
+                        prepare_model_world(world, Vec3::fill(0.3));
+                        let mut commands = Commands::new();
+                        (|entities_with_mesh: Query<&mut Handle<Mesh>>| {
+                            for m in entities_with_mesh.entities_and_components() {
+                                commands.add_component(*m.0, Collider::AttachedMeshConvex);
+                                commands.add_component(
+                                    *m.0,
+                                    RigidBody {
+                                        gravity_scale: 1.0,
+
+                                        ..Default::default()
+                                    },
+                                );
+                            }
+                        })
+                        .run(world);
+                        commands.apply(world);
+                    })),
+                },
+            ),
+        ];
 
         let mut loaded = false;
         move |event: Event, world: &mut World| {
@@ -164,10 +269,10 @@ fn main() {
                     }
                 }
                 Event::FixedUpdate => {
-                    // Check that all gltfs are loaded.
+                    // Check that all models are loaded.
                     (|worlds: &mut Assets<World>, game_state: &mut GameState| {
                         let mut loaded = true;
-                        for asset in &gltfs {
+                        for asset in &models {
                             if worlds.is_placeholder(asset) {
                                 loaded = false;
                                 break;
@@ -184,6 +289,9 @@ fn main() {
                         if input.key_down(Key::Space) {
                             game_state.game_mode = GameMode::Game
                         }
+                        if input.key_down(Key::T) {
+                            game_state.game_mode = GameMode::Title
+                        }
                     })
                     .run(world);
 
@@ -191,8 +299,96 @@ fn main() {
                         let mut commands = Commands::new();
                         (|worlds: &mut Assets<World>, game_state: &mut GameState| {
                             if game_state.loaded {
-                                let boat = worlds.get_mut(&gltfs[0]).clone_world();
-                                commands.add_world(boat);
+                                let mut random = Random::new();
+                                for _ in 0..50 {
+                                    let v = random.f32();
+                                    let random_position = Vec3::new(
+                                        random.f32() * 200.0,
+                                        random.f32() * 100.0 + 50.,
+                                        random.f32() * 200.0,
+                                    );
+                                    if v > 0.3 {
+                                        let mut boat = worlds.get_mut(&models[0]).clone_world();
+
+                                        (|transform: &mut Transform| {
+                                            transform.position = random_position;
+                                            transform.rotation = Quat::from_angle_axis(
+                                                random.f32() * std::f32::consts::TAU,
+                                                Vec3::Y,
+                                            );
+                                        })
+                                        .run(&mut boat);
+
+                                        commands.add_world(boat);
+
+                                        // Spawn some barrels on top
+                                        for _ in 0..3 {
+                                            let mut barrel =
+                                                worlds.get_mut(&models[2]).clone_world();
+
+                                            let random_offset = Vec3::new(
+                                                random.f32() * 2.0 - 1.0 - 4.0,
+                                                7.0,
+                                                random.f32() * 2.0 - 1.0 - 4.0,
+                                            );
+                                            (|transform: &mut Transform| {
+                                                transform.position =
+                                                    random_position + random_offset;
+
+                                                transform.rotation = Quat::from_angle_axis(
+                                                    random.f32() * std::f32::consts::TAU,
+                                                    Vec3::Y,
+                                                );
+                                            })
+                                            .run(&mut barrel);
+
+                                            commands.add_world(barrel);
+                                        }
+                                    } else {
+                                        let mut boat = worlds.get_mut(&models[1]).clone_world();
+
+                                        (|transform: &mut Transform| {
+                                            transform.position = random_position;
+
+                                            transform.rotation = Quat::from_angle_axis(
+                                                random.f32() * std::f32::consts::TAU,
+                                                Vec3::Y,
+                                            );
+                                        })
+                                        .run(&mut boat);
+
+                                        commands.add_world(boat);
+
+                                        // Spawn some barrels on top
+                                        for _ in 0..3 {
+                                            let mut barrel =
+                                                worlds.get_mut(&models[2]).clone_world();
+
+                                            let random_range = 4.0;
+                                            let random_offset = Vec3::new(
+                                                random.f32() * random_range
+                                                    - random_range / 2.0
+                                                    - 4.0,
+                                                7.0,
+                                                random.f32() * random_range
+                                                    - random_range / 2.0
+                                                    - 4.0,
+                                            );
+                                            (|transform: &mut Transform| {
+                                                transform.position =
+                                                    random_position + random_offset;
+
+                                                transform.rotation = Quat::from_angle_axis(
+                                                    random.f32() * std::f32::consts::TAU,
+                                                    Vec3::Y,
+                                                );
+                                            })
+                                            .run(&mut barrel);
+
+                                            commands.add_world(barrel);
+                                        }
+                                    }
+                                }
                                 loaded = true;
                             }
                         })
@@ -211,7 +407,6 @@ fn main() {
                     ui_manager.render_ui(world);
                     // Things that occur before rendering can go here.
                 }
-                _ => {}
             }
 
             // Do not consume the event and allow other systems to respond to it.

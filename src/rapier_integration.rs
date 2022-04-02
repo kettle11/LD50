@@ -15,6 +15,9 @@ pub struct RigidBody {
     pub kinematic: bool,
     pub velocity: Vec3,
     pub can_rotate: (bool, bool, bool),
+    pub gravity_scale: f32,
+    pub linear_damping: f32,
+    pub angular_damping: f32,
 }
 impl Default for RigidBody {
     fn default() -> Self {
@@ -22,6 +25,9 @@ impl Default for RigidBody {
             kinematic: false,
             velocity: Vec3::ZERO,
             can_rotate: (true, true, true),
+            gravity_scale: 1.0,
+            linear_damping: 0.0,
+            angular_damping: 0.0,
         }
     }
 }
@@ -115,6 +121,9 @@ impl RapierPhysicsManager {
                 false,
             );
             */
+            new_rigid_body.set_linear_damping(rigid_body.linear_damping);
+            new_rigid_body.set_angular_damping(rigid_body.angular_damping);
+
             if !rigid_body.can_rotate.0 || !rigid_body.can_rotate.1 || !rigid_body.can_rotate.2 {
                 new_rigid_body.lock_rotations(true, false);
             }
@@ -284,18 +293,24 @@ impl RapierPhysicsManager {
                 if current_position != position
                     || current_rotation != rotation
                     || current_velocity != velocity
+                    || rigid_body_koi.gravity_scale != rigid_body_ref.gravity_scale()
                 {
                     // to_angle_axis might not work correctly.
                     // it definitely fails for the identity rotation.
-                    let (angle, axis) = transform.rotation.to_angle_axis();
-                    let angle_axis = angle * axis;
+                    let [x, y, z, w] = transform.rotation.as_array();
 
                     rigid_body_ref.set_position(position.into(), true);
-                    rigid_body_ref.set_linvel(velocity.into(), true)
-                    // rigid_body_ref.set_rotation(
-                    //     AngVector::new(angle_axis.x, angle_axis.y, angle_axis.z),
-                    //     true,
-                    // );
+                    rigid_body_ref.set_linvel(velocity.into(), true);
+                    rigid_body_ref.set_gravity_scale(rigid_body_koi.gravity_scale, true);
+                    let q = rapier3d::prelude::nalgebra::Unit::<
+                        rapier3d::prelude::nalgebra::Quaternion<f32>,
+                    >::from_quaternion(
+                        rapier3d::prelude::nalgebra::Quaternion::from_parts(
+                            w,
+                            rapier3d::prelude::nalgebra::Vector3::new(x, y, z),
+                        ),
+                    );
+                    rigid_body_ref.set_rotation(q.vector().into(), true);
                 }
             }
         }
