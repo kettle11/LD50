@@ -2,21 +2,30 @@ use crate::*;
 
 #[derive(Component, Clone)]
 pub struct CharacterController {
+    grapple_target: Entity,
     grapple_position: Option<(Vec3, f32)>,
 }
 
-impl CharacterController {
-    pub fn new() -> Self {
-        Self {
-            grapple_position: None,
-        }
-    }
-}
+#[derive(Component, Clone)]
+pub struct GrappleTarget;
 
 #[derive(Component, Clone)]
 pub struct CharacterControllerCamera;
 
 impl CharacterController {
+    pub fn new(world: &mut World) -> Self {
+        Self {
+            grapple_target: world.spawn((
+                Mesh::SPHERE,
+                Transform::new(),
+                Material::DEFAULT,
+                Color::AZURE,
+                GrappleTarget,
+            )),
+            grapple_position: None,
+        }
+    }
+
     pub fn fixed_update(
         input: &Input,
         rapier_physics: &mut RapierPhysicsManager,
@@ -28,6 +37,8 @@ impl CharacterController {
             &RapierCollider,
         )>,
         time: &Time,
+        (grapple_target_transform, _): (&mut Transform, &GrappleTarget),
+        immediate_drawer: &mut ImmediateDrawer,
     ) {
         for (transform, character_controller, rigid_body, rapier_collider) in controlled.iter_mut()
         {
@@ -54,17 +65,17 @@ impl CharacterController {
                 .is_some();
 
             let ground_acceleration = 0.2;
-            let air_acceleration = 0.03;
+            let air_acceleration = 0.1;
             let acceleration = if grounded {
                 ground_acceleration
             } else {
                 air_acceleration
             };
-            let mut forward = transform.forward();
+            let mut forward = camera_transform.forward();
             forward.y = 0.0;
             forward = forward.normalized();
 
-            let mut right = transform.right();
+            let mut right = camera_transform.right();
             right.y = 0.0;
             right = right.normalized();
 
@@ -120,9 +131,20 @@ impl CharacterController {
                 );
 
                 if let Some(result) = result {
+                    let position = camera_ray.get_point(result.1);
+                    println!(
+                        "DISTANCE FROM CAMERA TO BODY: {:?}",
+                        (camera_transform.position - transform.position).length()
+                    );
                     println!("GRAPPLING");
-                    character_controller.grapple_position =
-                        Some((camera_ray.get_point(result.1) + Vec3::Y * 0.5, 2.0));
+                    grapple_target_transform.position = position;
+
+                    immediate_drawer.set_color(Color::YELLOW);
+                    immediate_drawer.draw_sphere_for_n_frames(
+                        Transform::new().with_position(camera_ray.origin),
+                        120 * 4,
+                    );
+                    //character_controller.grapple_position = Some((position, 2.0));
                 }
             }
 

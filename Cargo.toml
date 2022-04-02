@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 rapier3d = {version = "0.11.1"}
-koi = {path = "../koi2", default-features=false, features=["gltf", "jpeg", "png", "graphics", "renderer", "ui", "hdri"]}
+koi = {path = "../koi2", default-features=false, features=["gltf", "jpeg", "png", "graphics", "renderer", "ui", "hdri", "audio"]}

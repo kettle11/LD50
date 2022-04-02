@@ -247,6 +247,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hound"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a164bb2ceaeff4f42542bdb847c41517c78a60f5649671b2a07312b6e117549"
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -299,6 +305,15 @@ dependencies = [
  "kwasm",
  "objc",
  "raw-window-handle",
+]
+
+[[package]]
+name = "kaudio"
+version = "0.1.0"
+dependencies = [
+ "hound",
+ "kwasm",
+ "wasm_set_stack_pointer",
 ]
 
 [[package]]
@@ -376,6 +391,7 @@ dependencies = [
  "hdrldr",
  "jpeg-decoder",
  "kapp",
+ "kaudio",
  "kcolor",
  "kecs",
  "kgltf",
@@ -386,6 +402,7 @@ dependencies = [
  "ktasks",
  "kui",
  "kwasm",
+ "oddio",
  "oorandom",
  "png",
 ]
@@ -532,6 +549,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "mint"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e53debba6bda7a793e5f99b8dacf19e626084f525f7829104ba9898f367d85ff"
+
+[[package]]
 name = "nalgebra"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -625,6 +648,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "915b1b472bc21c53464d6c8461c9d3af805ba1ef837e1cac254428f4a77177b1"
 dependencies = [
  "malloc_buf",
+]
+
+[[package]]
+name = "oddio"
+version = "0.5.0"
+source = "git+https://github.com/Ralith/oddio/#e49692946b2f1425c23af4238462921fb5af41eb"
+dependencies = [
+ "mint",
 ]
 
 [[package]]

@@ -15,7 +15,6 @@ pub use character_controller::*;
 #[derive(Component, Clone)]
 struct GameState {
     game_mode: GameMode,
-    loaded: bool,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -60,6 +59,7 @@ fn prepare_model_world(world: &mut World, scale: Vec3) {
 
 fn main() {
     App::new().setup_and_run(|world: &mut World| {
+        let environment_size = 200.;
         // Setup things here.
 
         // Spawn a camera and make it look towards the origin.
@@ -74,65 +74,45 @@ fn main() {
         ));
         */
 
+        let low_poly_uv_sphere = (|meshes: &mut Assets<Mesh>, graphics: &mut Graphics| {
+            meshes.add(Mesh::new(graphics, uv_sphere(4, 4, Vec2::ONE)))
+        })
+        .run(world);
+
         world.spawn(GameState {
             game_mode: GameMode::Title,
-            loaded: false,
         });
 
         spawn_skybox(world, "assets/venice_sunset.hdr");
 
-        // Setup the water plane
-        let water_material = (|materials: &mut Assets<Material>| {
-            materials.add(new_pbr_material(
-                Shader::PHYSICALLY_BASED_TRANSPARENT_DOUBLE_SIDED,
-                PBRProperties {
-                    roughness: 0.02,
-                    base_color: Color::new_from_bytes(7, 80, 97, 200),
-                    ..Default::default()
-                },
-            ))
-        })
-        .run(world);
+        let sounds = world.get_singleton::<Assets<Sound>>();
+        let upbeat_vibes_song = sounds.load("assets/upbeat_vibes.wav");
 
-        world.spawn((
-            Transform::new().with_scale(Vec3::fill(1000000.)),
-            Mesh::PLANE,
-            water_material.clone(),
-            RenderFlags::DEFAULT.with_layer(RenderFlags::DO_NOT_CAST_SHADOWS),
+        // Setup the player
+        let mut player_audio_source = AudioSource::new();
+        player_audio_source.play(&upbeat_vibes_song, true);
+        let camera = world.spawn((
+            Transform::new().with_position(Vec3::Y * 1.0),
+            Camera::new(),
+            CharacterControllerCamera,
+            Listener::new(),
+            MouseLook::new(),
+            player_audio_source,
         ));
 
-        /*
-        world.spawn((
-            Transform::new()
-                .with_position(Vec3::Y * -200.0)
-                .with_scale(Vec3::fill(1000.0)),
-            // Collider::Cuboid(Vec3::fill(0.5)),
-            Mesh::CUBE,
-            Material::DEFAULT,
-            Color::AZURE,
-        ));
-        */
-
+        // Setup the player
+        let character_controller = CharacterController::new(world);
         let character_parent = world.spawn((
-            Transform::new().with_position(Vec3::Y * 10.0),
+            Transform::new().with_position(Vec3::Y * 100.0 + Vec3::XZ * environment_size / 2.0),
             Collider::Sphere(0.5),
             RigidBody {
                 kinematic: false,
                 can_rotate: (false, false, false),
                 ..Default::default()
             },
-            CharacterController::new(),
-            MouseLook::new(),
-        ));
-
-        let camera = world.spawn((
-            Transform::new().with_position(Vec3::Y * 1.0),
-            Camera::new(),
-            CharacterControllerCamera,
+            character_controller,
         ));
         set_parent(world, Some(character_parent), camera);
-
-        // Spawn a cube that we can control
 
         world.spawn(RapierPhysicsManager::new());
 
@@ -178,10 +158,10 @@ fn main() {
         let worlds = world.get_singleton::<Assets<World>>();
         let models = [
             worlds.load_with_options(
-                "assets/boat.glb",
+                "assets/boat3.glb",
                 LoadWorldOptions {
                     run_on_world: Some(Box::new(|world: &mut World| {
-                        prepare_model_world(world, Vec3::fill(2.0));
+                        prepare_model_world(world, Vec3::fill(3.0));
                         let mut commands = Commands::new();
                         (|entities_with_mesh: Query<&mut Handle<Mesh>>| {
                             for m in entities_with_mesh.entities_and_components() {
@@ -221,8 +201,8 @@ fn main() {
                                         kinematic: false,
                                         can_rotate: (true, true, true),
                                         gravity_scale: 0.0,
-                                        linear_damping: 0.6,
-                                        angular_damping: 0.0,
+                                        linear_damping: 1.0,
+                                        angular_damping: 1.0,
                                         velocity: Vec3::ZERO,
                                         ..Default::default()
                                     },
@@ -258,9 +238,39 @@ fn main() {
                     })),
                 },
             ),
+            worlds.load_with_options(
+                "assets/boat3.glb",
+                LoadWorldOptions {
+                    run_on_world: Some(Box::new(|world: &mut World| {
+                        prepare_model_world(world, Vec3::fill(2.0));
+                        let mut commands = Commands::new();
+                        (|entities_with_mesh: Query<&mut Handle<Mesh>>| {
+                            for m in entities_with_mesh.entities_and_components() {
+                                commands.add_component(*m.0, Color::RED);
+                                commands.add_component(*m.0, Collider::AttachedMeshConvex);
+                                commands.add_component(
+                                    *m.0,
+                                    RigidBody {
+                                        kinematic: false,
+                                        can_rotate: (true, true, true),
+                                        gravity_scale: 0.01,
+                                        linear_damping: 0.6,
+                                        angular_damping: 0.0,
+                                        velocity: Vec3::ZERO,
+                                        ..Default::default()
+                                    },
+                                );
+                            }
+                        })
+                        .run(world);
+                        commands.apply(world);
+                    })),
+                },
+            ),
         ];
 
         let mut loaded = false;
+        let mut setup = false;
         move |event: Event, world: &mut World| {
             match event {
                 Event::KappEvent(event) => {
@@ -271,15 +281,12 @@ fn main() {
                 Event::FixedUpdate => {
                     // Check that all models are loaded.
                     (|worlds: &mut Assets<World>, game_state: &mut GameState| {
-                        let mut loaded = true;
+                        loaded = true;
                         for asset in &models {
                             if worlds.is_placeholder(asset) {
                                 loaded = false;
                                 break;
                             }
-                        }
-                        if loaded {
-                            game_state.loaded = true;
                         }
                     })
                     .run(world);
@@ -295,110 +302,123 @@ fn main() {
                     })
                     .run(world);
 
-                    if !loaded {
+                    if loaded && !setup {
+                        setup = true;
+                        // Setup the water plane
+                        let water_material = (|materials: &mut Assets<Material>| {
+                            materials.add(new_pbr_material(
+                                Shader::PHYSICALLY_BASED_TRANSPARENT_DOUBLE_SIDED,
+                                PBRProperties {
+                                    roughness: 0.02,
+                                    base_color: Color::new_from_bytes(7, 80, 97, 200),
+                                    ..Default::default()
+                                },
+                            ))
+                        })
+                        .run(world);
+
+                        world.spawn((
+                            Transform::new().with_scale(Vec3::fill(1000000.)),
+                            Mesh::PLANE,
+                            water_material.clone(),
+                            RenderFlags::DEFAULT.with_layer(RenderFlags::DO_NOT_CAST_SHADOWS),
+                        ));
+
                         let mut commands = Commands::new();
-                        (|worlds: &mut Assets<World>, game_state: &mut GameState| {
-                            if game_state.loaded {
-                                let mut random = Random::new();
-                                for _ in 0..50 {
-                                    let v = random.f32();
-                                    let random_position = Vec3::new(
-                                        random.f32() * 200.0,
-                                        random.f32() * 100.0 + 50.,
-                                        random.f32() * 200.0,
-                                    );
-                                    if v > 0.3 {
-                                        let mut boat = worlds.get_mut(&models[0]).clone_world();
 
+                        (|worlds: &mut Assets<World>| {
+                            let mut random = Random::new();
+                            for _ in 0..50 {
+                                let v = random.f32();
+                                let random_position = Vec3::new(
+                                    random.f32() * environment_size,
+                                    random.f32() * 100.0 + 50.,
+                                    random.f32() * environment_size,
+                                );
+                                if v > 0.3 {
+                                    let mut boat = worlds.get_mut(&models[0]).clone_world();
+
+                                    (|transform: &mut Transform| {
+                                        transform.position = random_position;
+                                        transform.rotation = Quat::from_angle_axis(
+                                            random.f32() * std::f32::consts::TAU,
+                                            Vec3::Y,
+                                        );
+                                    })
+                                    .run(&mut boat);
+
+                                    commands.add_world(boat);
+
+                                    // Spawn some barrels on top
+                                    for _ in 0..3 {
+                                        let mut barrel = worlds.get_mut(&models[2]).clone_world();
+
+                                        let random_offset = Vec3::new(
+                                            random.f32() * 2.0 - 1.0 - 4.0,
+                                            7.0,
+                                            random.f32() * 2.0 - 1.0 - 4.0,
+                                        );
                                         (|transform: &mut Transform| {
-                                            transform.position = random_position;
-                                            transform.rotation = Quat::from_angle_axis(
-                                                random.f32() * std::f32::consts::TAU,
-                                                Vec3::Y,
-                                            );
-                                        })
-                                        .run(&mut boat);
-
-                                        commands.add_world(boat);
-
-                                        // Spawn some barrels on top
-                                        for _ in 0..3 {
-                                            let mut barrel =
-                                                worlds.get_mut(&models[2]).clone_world();
-
-                                            let random_offset = Vec3::new(
-                                                random.f32() * 2.0 - 1.0 - 4.0,
-                                                7.0,
-                                                random.f32() * 2.0 - 1.0 - 4.0,
-                                            );
-                                            (|transform: &mut Transform| {
-                                                transform.position =
-                                                    random_position + random_offset;
-
-                                                transform.rotation = Quat::from_angle_axis(
-                                                    random.f32() * std::f32::consts::TAU,
-                                                    Vec3::Y,
-                                                );
-                                            })
-                                            .run(&mut barrel);
-
-                                            commands.add_world(barrel);
-                                        }
-                                    } else {
-                                        let mut boat = worlds.get_mut(&models[1]).clone_world();
-
-                                        (|transform: &mut Transform| {
-                                            transform.position = random_position;
+                                            transform.position = random_position + random_offset;
 
                                             transform.rotation = Quat::from_angle_axis(
                                                 random.f32() * std::f32::consts::TAU,
                                                 Vec3::Y,
                                             );
                                         })
-                                        .run(&mut boat);
+                                        .run(&mut barrel);
 
-                                        commands.add_world(boat);
+                                        commands.add_world(barrel);
+                                    }
+                                } else {
+                                    let mut boat = worlds.get_mut(&models[1]).clone_world();
 
-                                        // Spawn some barrels on top
-                                        for _ in 0..3 {
-                                            let mut barrel =
-                                                worlds.get_mut(&models[2]).clone_world();
+                                    (|transform: &mut Transform| {
+                                        transform.position = random_position;
 
-                                            let random_range = 4.0;
-                                            let random_offset = Vec3::new(
-                                                random.f32() * random_range
-                                                    - random_range / 2.0
-                                                    - 4.0,
-                                                7.0,
-                                                random.f32() * random_range
-                                                    - random_range / 2.0
-                                                    - 4.0,
+                                        transform.rotation = Quat::from_angle_axis(
+                                            random.f32() * std::f32::consts::TAU,
+                                            Vec3::Y,
+                                        );
+                                    })
+                                    .run(&mut boat);
+
+                                    commands.add_world(boat);
+
+                                    // Spawn some barrels on top
+                                    for _ in 0..3 {
+                                        let mut barrel = worlds.get_mut(&models[2]).clone_world();
+
+                                        let random_range = 4.0;
+                                        let random_offset = Vec3::new(
+                                            random.f32() * random_range - random_range / 2.0 - 4.0,
+                                            7.0,
+                                            random.f32() * random_range - random_range / 2.0 - 4.0,
+                                        );
+                                        (|transform: &mut Transform| {
+                                            transform.position = random_position + random_offset;
+
+                                            transform.rotation = Quat::from_angle_axis(
+                                                random.f32() * std::f32::consts::TAU,
+                                                Vec3::Y,
                                             );
-                                            (|transform: &mut Transform| {
-                                                transform.position =
-                                                    random_position + random_offset;
+                                        })
+                                        .run(&mut barrel);
 
-                                                transform.rotation = Quat::from_angle_axis(
-                                                    random.f32() * std::f32::consts::TAU,
-                                                    Vec3::Y,
-                                                );
-                                            })
-                                            .run(&mut barrel);
-
-                                            commands.add_world(barrel);
-                                        }
+                                        commands.add_world(barrel);
                                     }
                                 }
-                                loaded = true;
                             }
                         })
                         .run(world);
                         commands.apply(world);
                     }
 
-                    RapierPhysicsManager::fixed_update(world);
-                    MouseLook::fixed_update.run(world);
-                    CharacterController::fixed_update.run(world);
+                    if setup {
+                        MouseLook::fixed_update.run(world);
+                        CharacterController::fixed_update.run(world);
+                        RapierPhysicsManager::fixed_update(world);
+                    }
                     // Perform physics and game related updates here.
                 }
                 Event::Draw => {
