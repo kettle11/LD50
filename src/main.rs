@@ -59,8 +59,36 @@ fn main() {
 
         world.spawn(RapierPhysicsManager::new());
 
+        // Setup UI
+        let mut ui_manager = UIManager::new(world);
+
+        let mut fonts = Fonts::empty();
+        fonts
+            .new_font_from_bytes(include_bytes!("../assets/Jomhuria-Regular.ttf"))
+            .unwrap();
+        //fonts.load_default_fonts();
+
+        let mut standard_context = StandardContext::new(
+            StandardStyle {
+                primary_text_color: Color::WHITE,
+                primary_color: Color::BLACK.with_alpha(0.5),
+                padding: 12.,
+                ..Default::default()
+            },
+            StandardInput::default(),
+            fonts,
+        );
+
+        let mut ui = center(text("The Last Sky Pirate").with_size(|_, _, _| 100.));
+        world.spawn((Transform::new(), Camera::new_for_user_interface()));
+
         move |event: Event, world: &mut World| {
             match event {
+                Event::KappEvent(event) => {
+                    if ui_manager.handle_event(&event, world, &mut standard_context) {
+                        return true;
+                    }
+                }
                 Event::FixedUpdate => {
                     RapierPhysicsManager::fixed_update(world);
                     MouseLook::fixed_update.run(world);
@@ -68,6 +96,9 @@ fn main() {
                     // Perform physics and game related updates here.
                 }
                 Event::Draw => {
+                    ui_manager.prepare(world, &mut standard_context);
+                    ui_manager.layout(world, &mut standard_context, &mut ui);
+                    ui_manager.render_ui(world);
                     // Things that occur before rendering can go here.
                 }
                 _ => {}
