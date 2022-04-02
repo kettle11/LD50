@@ -5,6 +5,7 @@ pub struct ExplosionManager {
     explosion_mesh: Handle<Mesh>,
     explosions_queue: Vec<ExplosionData>,
     colors: Vec<Color>,
+    colliders_intersected: Vec<rapier3d::prelude::ColliderHandle>,
 }
 
 #[derive(Clone)]
@@ -33,6 +34,7 @@ impl ExplosionManager {
                 Color::new(239. / 255., 249. / 255., 126. / 255., 1.0),
                 Color::new(204. / 255., 137. / 255., 75. / 255., 1.0),
             ],
+            colliders_intersected: Vec::new(),
         });
     }
 
@@ -40,6 +42,8 @@ impl ExplosionManager {
         &mut self,
         commands: &mut Commands,
         mut explosion_pieces: Query<(&Transform, &mut ExplosionPiece)>,
+        mut rigid_bodies: Query<(&mut Transform, &RapierRigidBody, &mut RigidBody)>,
+        rapier_physics_manager: &mut RapierPhysicsManager,
     ) {
         fn spawn_piece(
             colors: &[Color],
@@ -74,6 +78,86 @@ impl ExplosionManager {
                     self.explosion_mesh.clone(),
                     commands,
                 );
+
+                let falloff = scale * 5.0;
+                self.colliders_intersected.clear();
+                rapier_physics_manager
+                    .query_pipeline
+                    .intersections_with_shape(
+                        &rapier_physics_manager.collider_set,
+                        &rapier3d::math::Isometry::translation(center.x, center.y, center.z),
+                        &rapier3d::prelude::Ball::new(falloff),
+                        rapier3d::prelude::InteractionGroups::all(),
+                        None,
+                        |handle| {
+                            self.colliders_intersected.push(handle);
+                            true
+                        },
+                    );
+
+                for collider_handle in self.colliders_intersected.iter() {
+                    let collider = rapier_physics_manager
+                        .collider_set
+                        .get(*collider_handle)
+                        .unwrap();
+                    let collider_center = collider.position();
+
+                    let center: [f32; 3] = center.into();
+                    let center: rapier3d::prelude::nalgebra::Point3<f32> = center.into();
+                    /*/
+                    let ray = rapier3d::prelude::Ray::new(
+                        center,
+                        &rapier3d::prelude::nalgebra::Point3::new(
+                            collider_center.translation.x,
+                            collider_center.translation.y,
+                            collider_center.translation.z,
+                        ) - center,
+                    );
+
+                    rapier_physics_manager.query_pipeline.cast_ray(
+                        &[collider],
+                        &ray,
+                        100.,
+                        true,
+                        rapier3d::prelude::InteractionGroups::all(),
+                        None,
+                    );
+                    */
+
+                    let dir = &rapier3d::prelude::nalgebra::Point3::new(
+                        collider_center.translation.x,
+                        collider_center.translation.y,
+                        collider_center.translation.z,
+                    ) - center;
+                    let max_force = 4.0 * scale;
+
+                    if let Some(parent) = rapier_physics_manager
+                        .collider_set
+                        .get(*collider_handle)
+                        .unwrap()
+                        .parent()
+                    {
+                        let mag = dir.magnitude();
+                        let falloff = 1.0 - (mag / falloff);
+                        let falloff = (falloff * falloff).min(1.0);
+                        let mut impulse = dir.normalize() * falloff * max_force;
+
+                        if impulse.y > 0.0 {
+                            impulse.y *= 2.0;
+                        }
+                        rapier_physics_manager
+                            .rigid_body_set
+                            .get_mut(parent)
+                            .unwrap()
+                            .apply_impulse(impulse, true);
+
+                        rapier_physics_manager
+                            .rigid_body_set
+                            .get_mut(parent)
+                            .unwrap()
+                            .apply_torque_impulse(impulse / 3., true);
+                    }
+                }
             }
         }
 

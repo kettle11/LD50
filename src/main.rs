@@ -105,11 +105,11 @@ fn main() {
         let character_parent = world.spawn((
             Transform::new().with_position(Vec3::Y * 100.0 + Vec3::XZ * environment_size / 2.0),
             Collider::Sphere(0.5),
-            RigidBody {
+            RigidBody::new(RigidBodyInner {
                 kinematic: false,
                 can_rotate: (false, false, false),
                 ..Default::default()
-            },
+            }),
             character_controller,
         ));
         set_parent(world, Some(character_parent), camera);
@@ -175,15 +175,15 @@ fn main() {
                                 commands.add_component(*m.0, Collider::AttachedMeshConvex);
                                 commands.add_component(
                                     *m.0,
-                                    RigidBody {
+                                    RigidBody::new(RigidBodyInner {
                                         kinematic: false,
                                         can_rotate: (true, true, true),
-                                        gravity_scale: 0.01,
-                                        linear_damping: 0.8,
-                                        angular_damping: 0.9,
+                                        gravity_scale: 0.0,
+                                        linear_damping: 0.0,
+                                        angular_damping: 0.0,
                                         velocity: Vec3::ZERO,
                                         ..Default::default()
-                                    },
+                                    }),
                                 );
                             }
                         })
@@ -203,7 +203,7 @@ fn main() {
                                 commands.add_component(*m.0, Collider::AttachedMeshConvex);
                                 commands.add_component(
                                     *m.0,
-                                    RigidBody {
+                                    RigidBody::new(RigidBodyInner {
                                         kinematic: false,
                                         can_rotate: (true, true, true),
                                         gravity_scale: 0.0,
@@ -211,7 +211,7 @@ fn main() {
                                         angular_damping: 1.0,
                                         velocity: Vec3::ZERO,
                                         ..Default::default()
-                                    },
+                                    }),
                                 );
                             }
                         })
@@ -231,11 +231,11 @@ fn main() {
                                 commands.add_component(*m.0, Collider::AttachedMeshConvex);
                                 commands.add_component(
                                     *m.0,
-                                    RigidBody {
+                                    RigidBody::new(RigidBodyInner {
                                         gravity_scale: 1.0,
 
                                         ..Default::default()
-                                    },
+                                    }),
                                 );
                             }
                         })
@@ -256,15 +256,15 @@ fn main() {
                                 commands.add_component(*m.0, Collider::AttachedMeshConvex);
                                 commands.add_component(
                                     *m.0,
-                                    RigidBody {
+                                    RigidBody::new(RigidBodyInner {
                                         kinematic: false,
                                         can_rotate: (true, true, true),
                                         gravity_scale: 0.01,
-                                        linear_damping: 0.6,
+                                        linear_damping: 0.0,
                                         angular_damping: 0.0,
                                         velocity: Vec3::ZERO,
                                         ..Default::default()
-                                    },
+                                    }),
                                 );
                             }
                         })
@@ -331,6 +331,19 @@ fn main() {
                             water_material.clone(),
                             RenderFlags::DEFAULT.with_layer(RenderFlags::DO_NOT_CAST_SHADOWS),
                         ));
+
+                        /*
+                        world.spawn((
+                            Transform::new()
+                                .with_scale(Vec3::fill(200.))
+                                .with_position(-Vec3::Y * 99. + Vec3::XZ * 100.),
+                            Mesh::CUBE,
+                            Material::DEFAULT,
+                            Color::WHITE,
+                            Collider::Cuboid(Vec3::fill(0.5)),
+                            RenderFlags::DEFAULT.with_layer(RenderFlags::DO_NOT_CAST_SHADOWS),
+                        ));
+                        */
 
                         let mut commands = Commands::new();
 

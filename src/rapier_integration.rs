@@ -1,17 +1,20 @@
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, HashSet},
+    ops::{Deref, DerefMut},
+};
 
 use koi::*;
 use rapier3d::{
     math::Isometry,
     na::UnitQuaternion,
-    prelude::{QueryPipeline, SharedShape},
+    prelude::{ColliderHandle, QueryPipeline, SharedShape},
 };
 
 #[derive(Component, Clone)]
 struct Controlled;
 
-#[derive(Component, Clone)]
-pub struct RigidBody {
+#[derive(Clone)]
+pub struct RigidBodyInner {
     pub kinematic: bool,
     pub velocity: Vec3,
     pub can_rotate: (bool, bool, bool),
@@ -19,7 +22,39 @@ pub struct RigidBody {
     pub linear_damping: f32,
     pub angular_damping: f32,
 }
-impl Default for RigidBody {
+#[derive(Component, Clone)]
+pub struct RigidBody {
+    rigid_body_inner: RigidBodyInner,
+    mutated: bool,
+    pub mutated_velocity: bool,
+    pub mutated_position: bool,
+}
+
+impl RigidBody {
+    pub fn new(inner: RigidBodyInner) -> Self {
+        Self {
+            rigid_body_inner: inner,
+            mutated: true,
+            mutated_velocity: true,
+            mutated_position: true,
+        }
+    }
+}
+
+impl Deref for RigidBody {
+    type Target = RigidBodyInner;
+    fn deref(&self) -> &Self::Target {
+        &self.rigid_body_inner
+    }
+}
+
+impl DerefMut for RigidBody {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.mutated = true;
+        &mut self.rigid_body_inner
+    }
+}
+impl Default for RigidBodyInner {
     fn default() -> Self {
         Self {
             kinematic: false,
@@ -64,6 +99,7 @@ pub struct RapierPhysicsManager {
     pub ccd_solver: rapier3d::prelude::CCDSolver,
     pub cached_mesh_colliders: HashMap<Handle<Mesh>, SharedShape>,
     pub query_pipeline: QueryPipeline,
+    user_data_to_entity: Vec<Entity>,
 }
 
 impl RapierPhysicsManager {
@@ -81,6 +117,7 @@ impl RapierPhysicsManager {
             ccd_solver: rapier3d::prelude::CCDSolver::new(),
             cached_mesh_colliders: HashMap::new(),
             query_pipeline: QueryPipeline::new(),
+            user_data_to_entity: Vec::new(),
         }
     }
 
@@ -127,6 +164,9 @@ impl RapierPhysicsManager {
             if !rigid_body.can_rotate.0 || !rigid_body.can_rotate.1 || !rigid_body.can_rotate.2 {
                 new_rigid_body.lock_rotations(true, false);
             }
+
+            new_rigid_body.user_data = self.user_data_to_entity.len() as u128;
+            self.user_data_to_entity.push(*entity);
 
             commands.add_component(
                 *entity,
@@ -232,6 +272,8 @@ impl RapierPhysicsManager {
                     rapier3d::prelude::ColliderBuilder::new(shared_shape.clone()).build()
                 }
             };
+            collider.user_data = self.user_data_to_entity.len() as u128;
+            self.user_data_to_entity.push(*entity);
 
             let collider_handle = if let Some(rapier_rigid_body) = rapier_rigid_body {
                 self.collider_set.insert_with_parent(
@@ -254,6 +296,36 @@ impl RapierPhysicsManager {
             commands.add_component(*entity, RapierCollider(collider_handle))
         }
     }
+
+    /*
+    pub fn sync_with_rapier(
+        &mut self,
+        rigid_bodies: &mut Query<(&mut Transform, &RapierRigidBody, &mut RigidBody)>,
+        rapier_rigid_body_handle: rapier3d::prelude::RigidBodyHandle,
+    ) {
+        let rigid_body_ref = self.rigid_body_set.get(rapier_rigid_body_handle).unwrap();
+        let entity = self.user_data_to_entity[rigid_body_ref.user_data as usize];
+        let (transform, _, r) = rigid_bodies.get_entity_components_mut(entity).unwrap();
+
+        let current_position: [f32; 3] = rigid_body_ref
+            .position()
+            .transform_point(&rapier3d::prelude::nalgebra::Point3::new(0.0, 0.0, 0.0))
+            .into();
+        let current_rotation: [f32; 4] = rigid_body_ref.rotation().coords.into();
+        transform.position = current_position.into();
+
+        if r.can_rotate.0 || r.can_rotate.1 || r.can_rotate.2 {
+            transform.rotation = Quat::from_xyzw(
+                current_rotation[0],
+                current_rotation[1],
+                current_rotation[2],
+                current_rotation[3],
+            );
+        }
+        let linvel: [f32; 3] = (*rigid_body_ref.linvel()).into();
+        r.velocity = linvel.into();
+    }
+    */
 
     pub fn step(
         &mut self,
@@ -278,30 +350,14 @@ impl RapierPhysicsManager {
 
                 let position = transform.position;
                 let position: [f32; 3] = position.into();
-                let rotation: [f32; 4] = transform.rotation.into();
 
                 let rigid_body_ref = self.rigid_body_set.get_mut(rigid_body.0).unwrap();
 
-                let current_position: [f32; 3] = rigid_body_ref
-                    .position()
-                    .transform_point(&rapier3d::prelude::nalgebra::Point3::new(0.0, 0.0, 0.0))
-                    .into();
-                let current_velocity: [f32; 3] = (*rigid_body_ref.linvel()).into();
-
-                let current_rotation: [f32; 4] = rigid_body_ref.rotation().coords.into();
-
-                if current_position != position
-                    || current_rotation != rotation
-                    || current_velocity != velocity
-                    || rigid_body_koi.gravity_scale != rigid_body_ref.gravity_scale()
-                {
-                    // to_angle_axis might not work correctly.
-                    // it definitely fails for the identity rotation.
-                    let [x, y, z, w] = transform.rotation.as_array();
-
-                    rigid_body_ref.set_position(position.into(), true);
+                if rigid_body_koi.mutated_velocity {
                     rigid_body_ref.set_linvel(velocity.into(), true);
-                    rigid_body_ref.set_gravity_scale(rigid_body_koi.gravity_scale, true);
+                }
+                if rigid_body_koi.mutated_position {
+                    let [x, y, z, w] = transform.rotation.as_array();
                     let q = rapier3d::prelude::nalgebra::Unit::<
                         rapier3d::prelude::nalgebra::Quaternion<f32>,
                     >::from_quaternion(
@@ -310,7 +366,18 @@ impl RapierPhysicsManager {
                             rapier3d::prelude::nalgebra::Vector3::new(x, y, z),
                         ),
                     );
+                    rigid_body_ref.set_position(position.into(), true);
                     rigid_body_ref.set_rotation(q.vector().into(), true);
+                }
+
+                // if current_position != position
+                //     || current_rotation != rotation
+                //     || current_velocity != velocity
+                //     || rigid_body_koi.gravity_scale != rigid_body_ref.gravity_scale()
+                if rigid_body_koi.mutated {
+                    // to_angle_axis might not work correctly.
+                    // it definitely fails for the identity rotation.
+                    rigid_body_ref.set_gravity_scale(rigid_body_koi.gravity_scale, true);
                 }
             }
         }
@@ -336,6 +403,7 @@ impl RapierPhysicsManager {
             if r.kinematic {
                 continue;
             }
+
             if let Some(rigid_body_ref) = self.rigid_body_set.get(rigid_body.0) {
                 let current_position: [f32; 3] = rigid_body_ref
                     .position()
@@ -354,6 +422,9 @@ impl RapierPhysicsManager {
                 }
                 let linvel: [f32; 3] = (*rigid_body_ref.linvel()).into();
                 r.velocity = linvel.into();
+                r.mutated = false;
+                r.mutated_velocity = false;
+                r.mutated_position = false;
             }
         }
     }

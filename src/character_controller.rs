@@ -117,6 +117,8 @@ impl CharacterController {
                 rigid_body.velocity += right * acceleration;
             }
 
+            rigid_body.mutated_velocity = true;
+
             let mut shape_velocity = rigid_body.velocity;
             shape_velocity.x = 0.0;
             shape_velocity.y = 0.0;
@@ -154,7 +156,7 @@ impl CharacterController {
             );
             game_state.can_grapple = ray_cast.is_some();
 
-            if input.pointer_button(PointerButton::Secondary) {
+            if input.pointer_button_down(PointerButton::Secondary) {
                 if let Some(result) = ray_cast {
                     let position = camera_ray.get_point(result.1);
                     explosion_manager.new_explosion(position, 5.0);
@@ -191,12 +193,15 @@ impl CharacterController {
                     rigid_body.velocity =
                         velocity_along_direction * 0.8 + velocity_not_along_direction * 0.7;
                     rigid_body.gravity_scale = 0.1;
+                    rigid_body.mutated_velocity = true;
                 }
             }
 
             if let Some((grapple_position, time_remaining)) =
                 &mut character_controller.grapple_position
             {
+                rigid_body.mutated_velocity = true;
+
                 character_controller.extra_jumps = MAX_EXTRA_JUMPS;
                 let diff = *grapple_position - transform.position;
                 let dir_normalized = diff.normalized();
@@ -249,10 +254,8 @@ impl Cable {
         mut cables: Query<(&mut Handle<Mesh>, &Cable)>,
     ) {
         for (mesh, cable) in cables.iter_mut() {
-            meshes.replace_placeholder(
-                mesh,
-                Mesh::new(graphics, cylinder(cable.start, cable.end, 6, cable.radius)),
-            );
+            *meshes.get_mut(mesh) =
+                Mesh::new(graphics, cylinder(cable.start, cable.end, 6, cable.radius));
         }
     }
 }
