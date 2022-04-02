@@ -57,7 +57,7 @@ impl CharacterController {
                         transform.position.z,
                     ),
                     &[0.0, -1.0, 0.0].into(),
-                    &rapier3d::prelude::Ball::new(0.3),
+                    &rapier3d::prelude::Ball::new(0.5),
                     0.3,
                     rapier3d::prelude::InteractionGroups::all(),
                     Some(&|c| c != rapier_collider.0),
@@ -102,16 +102,19 @@ impl CharacterController {
 
             use rapier3d::prelude::*;
 
-            if grounded || true {
+            let mut jumped = false;
+            if grounded || character_controller.grapple_position.is_some() {
                 if input.key_down(Key::Space) {
-                    rigid_body.velocity += Vec3::Y * 10.0;
+                    rigid_body.velocity += Vec3::Y * 5.0;
+                    jumped = true;
                 }
             }
 
             if input.pointer_button_down(PointerButton::Primary) {
                 println!("CASTING RAY!");
-                let (x, y) = input.pointer_position();
-                let camera_ray = camera.view_to_ray(&camera_transform, x as f32, y as f32);
+                // let (x, y) = input.pointer_position();
+                let camera_ray =
+                    koi::Ray3::new(camera_transform.position, camera_transform.forward());
                 let origin: [f32; 3] = camera_ray.origin.into();
                 let direction: [f32; 3] = camera_ray.direction.into();
 
@@ -139,22 +142,48 @@ impl CharacterController {
                     println!("GRAPPLING");
                     grapple_target_transform.position = position;
 
+                    /*
                     immediate_drawer.set_color(Color::YELLOW);
                     immediate_drawer.draw_sphere_for_n_frames(
                         Transform::new().with_position(camera_ray.origin),
                         120 * 4,
                     );
-                    //character_controller.grapple_position = Some((position, 2.0));
+
+                    immediate_drawer.set_color(Color::CYAN);
+
+                    immediate_drawer.draw_sphere_for_n_frames(
+                        Transform::new()
+                            .with_position(camera_ray.origin + camera_ray.direction * 20.),
+                        120 * 4,
+                    );
+                    */
+                    character_controller.grapple_position = Some((position, 2.0));
+
+                    let velocity_along_direction =
+                        camera_ray.direction.dot(rigid_body.velocity) * camera_ray.direction;
+                    let velocity_not_along_direction =
+                        rigid_body.velocity - velocity_along_direction;
+                    rigid_body.velocity =
+                        velocity_along_direction * 0.8 + velocity_not_along_direction * 0.7;
+                    rigid_body.gravity_scale = 0.1;
                 }
             }
 
             if let Some((grapple_position, time_remaining)) =
                 &mut character_controller.grapple_position
             {
-                rigid_body.velocity += (*grapple_position - transform.position).normalized() * 0.2;
+                let diff = *grapple_position - transform.position;
+                rigid_body.velocity += diff.normalized() * 0.2;
+                rigid_body.velocity += camera_transform.forward() * 0.1;
+
+                let max_grapple_velocity = 20.0;
+                if rigid_body.velocity.length() > max_grapple_velocity {
+                    rigid_body.velocity = rigid_body.velocity.normalized() * max_grapple_velocity;
+                }
                 *time_remaining -= time.delta_seconds_f64 as f32;
-                if *time_remaining <= 0.0 {
+                if diff.length() < 0.3 || jumped {
                     character_controller.grapple_position = None;
+                    rigid_body.gravity_scale = 1.0;
                 }
             }
         }
