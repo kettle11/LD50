@@ -12,6 +12,9 @@ use rapier_integration::*;
 pub mod character_controller;
 pub use character_controller::*;
 
+mod explosion_manager;
+use explosion_manager::*;
+
 #[derive(Component, Clone)]
 pub struct GameState {
     game_mode: GameMode,
@@ -74,11 +77,6 @@ fn main() {
             CameraControls::new(),
         ));
         */
-
-        let low_poly_uv_sphere = (|meshes: &mut Assets<Mesh>, graphics: &mut Graphics| {
-            meshes.add(Mesh::new(graphics, uv_sphere(4, 4, Vec2::ONE)))
-        })
-        .run(world);
 
         world.spawn(GameState {
             game_mode: GameMode::Title,
@@ -277,6 +275,8 @@ fn main() {
             ),
         ];
 
+        ExplosionManager::setup_system(world);
+
         let mut loaded = false;
         let mut setup = false;
         move |event: Event, world: &mut World| {
@@ -423,6 +423,7 @@ fn main() {
                     }
 
                     if setup {
+                        ExplosionManager::fixed_update_system.run(world);
                         MouseLook::fixed_update.run(world);
                         CharacterController::fixed_update.run(world);
                         RapierPhysicsManager::fixed_update(world);

@@ -56,6 +56,7 @@ impl CharacterController {
         (_grapple_line_transform, cable): (&mut Transform, &mut Cable),
         _immediate_drawer: &mut ImmediateDrawer,
         game_state: &mut GameState,
+        explosion_manager: &mut ExplosionManager,
     ) {
         for (transform, character_controller, rigid_body, rapier_collider) in controlled.iter_mut()
         {
@@ -153,6 +154,12 @@ impl CharacterController {
             );
             game_state.can_grapple = ray_cast.is_some();
 
+            if input.pointer_button(PointerButton::Secondary) {
+                if let Some(result) = ray_cast {
+                    let position = camera_ray.get_point(result.1);
+                    explosion_manager.new_explosion(position, 5.0);
+                }
+            }
             if input.pointer_button_down(PointerButton::Primary) {
                 if let Some(result) = ray_cast {
                     let position = camera_ray.get_point(result.1);
