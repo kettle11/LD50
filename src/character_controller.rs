@@ -80,7 +80,7 @@ impl CharacterController {
                 vector![0.0, -1.0, 0.0],
             );
 
-            if grounded {
+            if grounded || true {
                 if input.key_down(Key::Space) {
                     rigid_body.velocity += Vec3::Y * 4.0;
                 }

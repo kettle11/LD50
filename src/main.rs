@@ -12,6 +12,61 @@ use rapier_integration::*;
 pub mod character_controller;
 pub use character_controller::*;
 
+#[derive(Component, Clone)]
+struct GameState {
+    game_mode: GameMode,
+    loaded: bool,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+enum GameMode {
+    Title,
+    Game,
+}
+
+fn scale_world_root(
+    scale: Vec3,
+    mut hierarchy_transforms: Query<(&mut Transform, Option<&HierarchyNode>)>,
+) {
+    for (transform, hierarchy_node) in hierarchy_transforms.iter_mut() {
+        if hierarchy_node.map_or(true, |h| h.parent().is_none()) {
+            transform.scale = scale;
+        }
+    }
+}
+
+fn prepare_model_world(world: &mut World, scale: Vec3) {
+    (|hierarchy_transforms: Query<(&mut Transform, Option<&HierarchyNode>)>| {
+        scale_world_root(scale, hierarchy_transforms)
+    })
+    .run(world);
+
+    let commands = Commands::new();
+    let commands_entity = world.spawn(commands);
+    koi::update_root_global_transforms.run(&world);
+    let mut commands = world.remove_component::<Commands>(commands_entity).unwrap();
+    commands.apply(world);
+    commands.clear();
+
+    // Update the world's transforms
+    let commands_entity = world.spawn(commands);
+    koi::update_global_transforms.run(&world);
+    let mut commands = world.remove_component::<Commands>(commands_entity).unwrap();
+    commands.apply(world);
+    commands.clear();
+
+    koi::flatten_world(world);
+
+    (|entities_with_mesh: Query<&mut Handle<Mesh>>| {
+        for m in entities_with_mesh.entities_and_components() {
+            commands.add_component(*m.0, Color::RED);
+            commands.add_component(*m.0, Collider::AttachedMesh);
+        }
+    })
+    .run(world);
+    commands.apply(world);
+}
+
 fn main() {
     App::new().setup_and_run(|world: &mut World| {
         // Setup things here.
@@ -27,6 +82,11 @@ fn main() {
             CameraControls::new(),
         ));
         */
+
+        world.spawn(GameState {
+            game_mode: GameMode::Title,
+            loaded: false,
+        });
 
         spawn_skybox(world, "assets/venice_sunset.hdr");
 
@@ -79,9 +139,23 @@ fn main() {
             fonts,
         );
 
-        let mut ui = center(text("The Last Sky Pirate").with_size(|_, _, _| 100.));
+        let mut ui = conditional(
+            |world: &mut World, _| world.get_singleton::<GameState>().game_mode == GameMode::Title,
+            center(text("The Last Sky Pirate").with_size(|_, _, _| 100.)),
+        );
         world.spawn((Transform::new(), Camera::new_for_user_interface()));
 
+        let worlds = world.get_singleton::<Assets<World>>();
+        let gltfs = [worlds.load_with_options(
+            "assets/boat.glb",
+            LoadWorldOptions {
+                run_on_world: Some(Box::new(|world: &mut World| {
+                    prepare_model_world(world, Vec3::fill(2.0))
+                })),
+            },
+        )];
+
+        let mut loaded = false;
         move |event: Event, world: &mut World| {
             match event {
                 Event::KappEvent(event) => {
@@ -90,6 +164,42 @@ fn main() {
                     }
                 }
                 Event::FixedUpdate => {
+                    // Check that all gltfs are loaded.
+                    (|worlds: &mut Assets<World>, game_state: &mut GameState| {
+                        let mut loaded = true;
+                        for asset in &gltfs {
+                            if worlds.is_placeholder(asset) {
+                                loaded = false;
+                                break;
+                            }
+                        }
+                        if loaded {
+                            game_state.loaded = true;
+                        }
+                    })
+                    .run(world);
+
+                    // Start the game.
+                    (|game_state: &mut GameState, input: &Input| {
+                        if input.key_down(Key::Space) {
+                            game_state.game_mode = GameMode::Game
+                        }
+                    })
+                    .run(world);
+
+                    if !loaded {
+                        let mut commands = Commands::new();
+                        (|worlds: &mut Assets<World>, game_state: &mut GameState| {
+                            if game_state.loaded {
+                                let boat = worlds.get_mut(&gltfs[0]).clone_world();
+                                commands.add_world(boat);
+                                loaded = true;
+                            }
+                        })
+                        .run(world);
+                        commands.apply(world);
+                    }
+
                     RapierPhysicsManager::fixed_update(world);
                     MouseLook::fixed_update.run(world);
                     CharacterController::fixed_update.run(world);
