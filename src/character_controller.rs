@@ -44,7 +44,7 @@ impl CharacterController {
     pub fn fixed_update(
         input: &Input,
         rapier_physics: &mut RapierPhysicsManager,
-        (camera_transform, camera, _): (&GlobalTransform, &Camera, &CharacterControllerCamera),
+        (camera_transform, _camera, _): (&GlobalTransform, &Camera, &CharacterControllerCamera),
         mut controlled: Query<(
             &mut Transform,
             &mut CharacterController,
@@ -53,8 +53,9 @@ impl CharacterController {
         )>,
         time: &Time,
         (grapple_target_transform, _): (&mut Transform, &GrappleTarget),
-        (grapple_line_transform, cable): (&mut Transform, &mut Cable),
-        immediate_drawer: &mut ImmediateDrawer,
+        (_grapple_line_transform, cable): (&mut Transform, &mut Cable),
+        _immediate_drawer: &mut ImmediateDrawer,
+        game_state: &mut GameState,
     ) {
         for (transform, character_controller, rigid_body, rapier_collider) in controlled.iter_mut()
         {
@@ -132,29 +133,28 @@ impl CharacterController {
                 }
             }
 
+            let camera_ray = koi::Ray3::new(camera_transform.position, camera_transform.forward());
+            let origin: [f32; 3] = camera_ray.origin.into();
+            let direction: [f32; 3] = camera_ray.direction.into();
+
+            let ray = Ray::new(origin.into(), direction.into());
+            rapier_physics.query_pipeline.update(
+                &rapier_physics.island_manager,
+                &rapier_physics.rigid_body_set,
+                &rapier_physics.collider_set,
+            );
+            let ray_cast = rapier_physics.query_pipeline.cast_ray(
+                &rapier_physics.collider_set,
+                &ray,
+                50.0,
+                false,
+                rapier3d::prelude::InteractionGroups::all(),
+                Some(&|c| c != rapier_collider.0),
+            );
+            game_state.can_grapple = ray_cast.is_some();
+
             if input.pointer_button_down(PointerButton::Primary) {
-                // let (x, y) = input.pointer_position();
-                let camera_ray =
-                    koi::Ray3::new(camera_transform.position, camera_transform.forward());
-                let origin: [f32; 3] = camera_ray.origin.into();
-                let direction: [f32; 3] = camera_ray.direction.into();
-
-                let ray = Ray::new(origin.into(), direction.into());
-                rapier_physics.query_pipeline.update(
-                    &rapier_physics.island_manager,
-                    &rapier_physics.rigid_body_set,
-                    &rapier_physics.collider_set,
-                );
-                let result = rapier_physics.query_pipeline.cast_ray(
-                    &rapier_physics.collider_set,
-                    &ray,
-                    300.0,
-                    false,
-                    rapier3d::prelude::InteractionGroups::all(),
-                    Some(&|c| c != rapier_collider.0),
-                );
-
-                if let Some(result) = result {
+                if let Some(result) = ray_cast {
                     let position = camera_ray.get_point(result.1);
 
                     println!("GRAPPLING");

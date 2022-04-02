@@ -13,8 +13,9 @@ pub mod character_controller;
 pub use character_controller::*;
 
 #[derive(Component, Clone)]
-struct GameState {
+pub struct GameState {
     game_mode: GameMode,
+    can_grapple: bool,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -81,6 +82,7 @@ fn main() {
 
         world.spawn(GameState {
             game_mode: GameMode::Title,
+            can_grapple: false,
         });
 
         spawn_skybox(world, "assets/venice_sunset.hdr");
@@ -149,7 +151,13 @@ fn main() {
                 },
                 center(stack((
                     rectangle(Vec2::fill(4.0)),
-                    fill(|_, _, _| Color::WHITE),
+                    fill(|world: &mut World, _, _| {
+                        if world.get_singleton::<GameState>().can_grapple {
+                            Color::WHITE
+                        } else {
+                            Color::BLACK
+                        }
+                    }),
                 ))),
             ),
         ));
@@ -173,8 +181,8 @@ fn main() {
                                         kinematic: false,
                                         can_rotate: (true, true, true),
                                         gravity_scale: 0.01,
-                                        linear_damping: 0.6,
-                                        angular_damping: 0.0,
+                                        linear_damping: 0.8,
+                                        angular_damping: 0.9,
                                         velocity: Vec3::ZERO,
                                         ..Default::default()
                                     },
