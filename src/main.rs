@@ -14,6 +14,9 @@ pub use character_controller::*;
 
 mod explosion_manager;
 use explosion_manager::*;
+use rocket::check_rocket_collisions_system;
+
+mod rocket;
 
 #[derive(Component, Clone)]
 pub struct GameState {
@@ -439,7 +442,9 @@ fn main() {
                         ExplosionManager::fixed_update_system.run(world);
                         MouseLook::fixed_update.run(world);
                         CharacterController::fixed_update.run(world);
+                        RapierPhysicsManager::despawn.run(world);
                         RapierPhysicsManager::fixed_update(world);
+                        check_rocket_collisions_system.run(world);
                     }
                     // Perform physics and game related updates here.
                 }

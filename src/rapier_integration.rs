@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     ops::{Deref, DerefMut},
 };
 
@@ -7,8 +7,11 @@ use koi::*;
 use rapier3d::{
     math::Isometry,
     na::UnitQuaternion,
-    prelude::{ColliderHandle, QueryPipeline, SharedShape},
+    prelude::{ActiveEvents, QueryPipeline, SharedShape},
 };
+
+#[derive(Component, Clone)]
+pub struct ToDespawn;
 
 #[derive(Component, Clone)]
 struct Controlled;
@@ -272,6 +275,7 @@ impl RapierPhysicsManager {
                     rapier3d::prelude::ColliderBuilder::new(shared_shape.clone()).build()
                 }
             };
+            collider.set_active_events(ActiveEvents::CONTACT_EVENTS);
             collider.user_data = self.user_data_to_entity.len() as u128;
             self.user_data_to_entity.push(*entity);
 
@@ -297,35 +301,34 @@ impl RapierPhysicsManager {
         }
     }
 
-    /*
-    pub fn sync_with_rapier(
+    pub fn despawn(
         &mut self,
-        rigid_bodies: &mut Query<(&mut Transform, &RapierRigidBody, &mut RigidBody)>,
-        rapier_rigid_body_handle: rapier3d::prelude::RigidBodyHandle,
+        commands: &mut Commands,
+        rigid_body_query: Query<
+            (Option<&RapierRigidBody>, Option<&RapierCollider>),
+            With<ToDespawn>,
+        >,
     ) {
-        let rigid_body_ref = self.rigid_body_set.get(rapier_rigid_body_handle).unwrap();
-        let entity = self.user_data_to_entity[rigid_body_ref.user_data as usize];
-        let (transform, _, r) = rigid_bodies.get_entity_components_mut(entity).unwrap();
-
-        let current_position: [f32; 3] = rigid_body_ref
-            .position()
-            .transform_point(&rapier3d::prelude::nalgebra::Point3::new(0.0, 0.0, 0.0))
-            .into();
-        let current_rotation: [f32; 4] = rigid_body_ref.rotation().coords.into();
-        transform.position = current_position.into();
-
-        if r.can_rotate.0 || r.can_rotate.1 || r.can_rotate.2 {
-            transform.rotation = Quat::from_xyzw(
-                current_rotation[0],
-                current_rotation[1],
-                current_rotation[2],
-                current_rotation[3],
-            );
+        for (entity, (body, collider)) in rigid_body_query.entities_and_components() {
+            if let Some(body) = body {
+                self.rigid_body_set.remove(
+                    body.0,
+                    &mut self.island_manager,
+                    &mut self.collider_set,
+                    &mut self.joint_set,
+                );
+            }
+            if let Some(collider) = collider {
+                self.collider_set.remove(
+                    collider.0,
+                    &mut self.island_manager,
+                    &mut self.rigid_body_set,
+                    false,
+                );
+            }
+            commands.despawn(*entity)
         }
-        let linvel: [f32; 3] = (*rigid_body_ref.linvel()).into();
-        r.velocity = linvel.into();
     }
-    */
 
     pub fn step(
         &mut self,

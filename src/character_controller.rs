@@ -1,3 +1,4 @@
+use crate::rocket::spawn_rocket;
 use crate::*;
 
 #[derive(Component, Clone)]
@@ -54,9 +55,9 @@ impl CharacterController {
         time: &Time,
         (grapple_target_transform, _): (&mut Transform, &GrappleTarget),
         (_grapple_line_transform, cable): (&mut Transform, &mut Cable),
-        _immediate_drawer: &mut ImmediateDrawer,
         game_state: &mut GameState,
         explosion_manager: &mut ExplosionManager,
+        commands: &mut Commands,
     ) {
         for (transform, character_controller, rigid_body, rapier_collider) in controlled.iter_mut()
         {
@@ -157,10 +158,18 @@ impl CharacterController {
             game_state.can_grapple = ray_cast.is_some();
 
             if input.pointer_button_down(PointerButton::Secondary) {
+                /*
                 if let Some(result) = ray_cast {
                     let position = camera_ray.get_point(result.1);
                     explosion_manager.new_explosion(position, 5.0);
                 }
+                */
+                println!("SPAWNING ROCKET");
+                spawn_rocket(
+                    commands,
+                    camera_transform.position,
+                    camera_transform.forward(),
+                )
             }
             if input.pointer_button_down(PointerButton::Primary) {
                 if let Some(result) = ray_cast {
