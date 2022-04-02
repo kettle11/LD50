@@ -90,7 +90,7 @@ fn main() {
 
         // Setup the player
         let mut player_audio_source = AudioSource::new();
-        player_audio_source.play(&upbeat_vibes_song, true);
+        //player_audio_source.play(&upbeat_vibes_song, true);
         let camera = world.spawn((
             Transform::new().with_position(Vec3::Y * 1.0),
             Camera::new(),
@@ -422,6 +422,8 @@ fn main() {
                     // Perform physics and game related updates here.
                 }
                 Event::Draw => {
+                    Cable::update_meshes_system.run(world);
+
                     ui_manager.prepare(world, &mut standard_context);
                     ui_manager.layout(world, &mut standard_context, &mut ui);
                     ui_manager.render_ui(world);

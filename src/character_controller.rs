@@ -3,12 +3,16 @@ use crate::*;
 #[derive(Component, Clone)]
 pub struct CharacterController {
     grapple_target: Entity,
+    grapple_line: Entity,
     grapple_position: Option<(Vec3, f32)>,
     extra_jumps: usize,
 }
 
 #[derive(Component, Clone)]
 pub struct GrappleTarget;
+
+#[derive(Component, Clone)]
+pub struct GrappleLine;
 
 #[derive(Component, Clone)]
 pub struct CharacterControllerCamera;
@@ -24,6 +28,13 @@ impl CharacterController {
                 Material::DEFAULT,
                 Color::AZURE,
                 GrappleTarget,
+            )),
+            grapple_line: world.spawn((
+                Mesh::CYLINDER,
+                Transform::new(),
+                Material::DEFAULT,
+                Color::BLACK.with_lightness(0.5),
+                Cable::new(),
             )),
             grapple_position: None,
             extra_jumps: MAX_EXTRA_JUMPS,
@@ -42,6 +53,7 @@ impl CharacterController {
         )>,
         time: &Time,
         (grapple_target_transform, _): (&mut Transform, &GrappleTarget),
+        (grapple_line_transform, cable): (&mut Transform, &mut Cable),
         immediate_drawer: &mut ImmediateDrawer,
     ) {
         for (transform, character_controller, rigid_body, rapier_collider) in controlled.iter_mut()
@@ -180,19 +192,60 @@ impl CharacterController {
             {
                 character_controller.extra_jumps = MAX_EXTRA_JUMPS;
                 let diff = *grapple_position - transform.position;
-                rigid_body.velocity += diff.normalized() * 0.2;
+                let dir_normalized = diff.normalized();
+                rigid_body.velocity += dir_normalized * 0.2;
                 rigid_body.velocity += camera_transform.forward() * 0.1;
 
-                let max_grapple_velocity = 20.0;
+                let max_grapple_velocity = 25.0;
                 if rigid_body.velocity.length() > max_grapple_velocity {
                     rigid_body.velocity = rigid_body.velocity.normalized() * max_grapple_velocity;
                 }
                 *time_remaining -= time.delta_seconds_f64 as f32;
+
+                cable.start = camera_transform.position
+                    + camera_transform.right() * 0.3
+                    + camera_transform.down() * 0.2;
+                cable.end = *grapple_position;
+
                 if diff.length() < 0.3 || jumped {
                     character_controller.grapple_position = None;
                     rigid_body.gravity_scale = 1.0;
+                    cable.start = Vec3::ZERO;
+                    cable.end = Vec3::ZERO;
                 }
             }
+        }
+    }
+}
+
+#[derive(Component, Clone)]
+pub struct Cable {
+    pub start: Vec3,
+    pub end: Vec3,
+    pub radius: f32,
+}
+
+impl Cable {
+    pub fn new() -> Self {
+        Self {
+            start: Vec3::ZERO,
+            end: Vec3::ZERO,
+            radius: 0.04,
+        }
+    }
+}
+
+impl Cable {
+    pub fn update_meshes_system(
+        graphics: &mut Graphics,
+        meshes: &mut Assets<Mesh>,
+        mut cables: Query<(&mut Handle<Mesh>, &Cable)>,
+    ) {
+        for (mesh, cable) in cables.iter_mut() {
+            meshes.replace_placeholder(
+                mesh,
+                Mesh::new(graphics, cylinder(cable.start, cable.end, 6, cable.radius)),
+            );
         }
     }
 }
