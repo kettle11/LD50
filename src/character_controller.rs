@@ -4,6 +4,7 @@ use crate::*;
 pub struct CharacterController {
     grapple_target: Entity,
     grapple_position: Option<(Vec3, f32)>,
+    extra_jumps: usize,
 }
 
 #[derive(Component, Clone)]
@@ -11,6 +12,8 @@ pub struct GrappleTarget;
 
 #[derive(Component, Clone)]
 pub struct CharacterControllerCamera;
+
+pub const MAX_EXTRA_JUMPS: usize = 3;
 
 impl CharacterController {
     pub fn new(world: &mut World) -> Self {
@@ -23,6 +26,7 @@ impl CharacterController {
                 GrappleTarget,
             )),
             grapple_position: None,
+            extra_jumps: MAX_EXTRA_JUMPS,
         }
     }
 
@@ -64,6 +68,10 @@ impl CharacterController {
                 )
                 .is_some();
 
+            if grounded {
+                character_controller.extra_jumps = MAX_EXTRA_JUMPS;
+            }
+
             let ground_acceleration = 0.2;
             let air_acceleration = 0.1;
             let acceleration = if grounded {
@@ -103,15 +111,16 @@ impl CharacterController {
             use rapier3d::prelude::*;
 
             let mut jumped = false;
-            if grounded || character_controller.grapple_position.is_some() {
+            if grounded || character_controller.extra_jumps > 0 {
                 if input.key_down(Key::Space) {
                     rigid_body.velocity += Vec3::Y * 5.0;
                     jumped = true;
+                    character_controller.extra_jumps =
+                        character_controller.extra_jumps.saturating_sub(1);
                 }
             }
 
             if input.pointer_button_down(PointerButton::Primary) {
-                println!("CASTING RAY!");
                 // let (x, y) = input.pointer_position();
                 let camera_ray =
                     koi::Ray3::new(camera_transform.position, camera_transform.forward());
@@ -135,10 +144,7 @@ impl CharacterController {
 
                 if let Some(result) = result {
                     let position = camera_ray.get_point(result.1);
-                    println!(
-                        "DISTANCE FROM CAMERA TO BODY: {:?}",
-                        (camera_transform.position - transform.position).length()
-                    );
+
                     println!("GRAPPLING");
                     grapple_target_transform.position = position;
 
@@ -172,6 +178,7 @@ impl CharacterController {
             if let Some((grapple_position, time_remaining)) =
                 &mut character_controller.grapple_position
             {
+                character_controller.extra_jumps = MAX_EXTRA_JUMPS;
                 let diff = *grapple_position - transform.position;
                 rigid_body.velocity += diff.normalized() * 0.2;
                 rigid_body.velocity += camera_transform.forward() * 0.1;
