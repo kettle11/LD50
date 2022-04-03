@@ -23,6 +23,8 @@ mod find_flat_parts;
 
 mod terrain_generator;
 
+mod worm;
+
 #[derive(Component, Clone)]
 pub struct GameState {
     game_mode: GameMode,
@@ -94,6 +96,12 @@ fn main() {
         //let mut terrain_meshes = Vec::new();
         let mut terrain = Terrain::new(size_xz, 512);
 
+        world.spawn((
+            Color::YELLOW,
+            Mesh::SPHERE,
+            Transform::new().with_scale(Vec3::fill(30.0)),
+            Material::DEFAULT,
+        ));
         //let mut terrain_chunks = Vec::new();
 
         // Spawn a chunk of the world
@@ -539,6 +547,8 @@ fn main() {
                         RapierPhysicsManager::despawn.run(world);
                         RapierPhysicsManager::fixed_update(world);
                         check_rocket_collisions_system.run(world);
+
+                        worm::run_worm(world);
                     }
                     // Perform physics and game related updates here.
                 }

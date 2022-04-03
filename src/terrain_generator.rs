@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use noise::NoiseFn;
-use noise::Perlin;
 
 use crate::*;
 
@@ -18,15 +17,16 @@ pub struct Terrain {
 
 impl Terrain {
     pub fn new(size_xz: usize, size_y: usize) -> Self {
+        let scale = 200.;
         let mut terrain = Self {
-            scale: 200.,
+            scale,
             size_xz,
             size_y,
             values: vec![0.0; size_xz * size_xz * size_y],
             mesh_normal_calculator: MeshNormalCalculator::new(),
             chunk_size: 32,
             chunks: HashMap::new(),
-            world_offset: -Vec3::Y * 50.0,
+            world_offset: -Vec3::Y * 50.0 - Vec3::XZ * scale / 2.0,
         };
         terrain.generate_height_data();
         terrain
