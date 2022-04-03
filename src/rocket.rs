@@ -22,12 +22,13 @@ pub fn spawn_rocket(commands: &mut Commands, start: Vec3, direction: Vec3) {
             .with_scale(Vec3::fill(0.2)),
         Collider::Sphere(0.5),
         Rocket {
-            velocity: direction * 40.0,
+            velocity: direction * 120.0,
         },
     ))
 }
 
 pub fn check_rocket_collisions_system(
+    (worm_position, worm): (&Transform, &mut Worm),
     commands: &mut Commands,
     rapier_physics: &RapierPhysicsManager,
     explosion_manager: &mut ExplosionManager,
@@ -48,6 +49,12 @@ pub fn check_rocket_collisions_system(
             break;
         }
         */
+        let worm_diff = transform.position.y - worm_position.position.y;
+        let on_worms_level = worm_diff < 0.0;
+        let hit_worm = worm_diff < -150.0
+            || (on_worms_level
+                && transform.position.xz().length_squared() > (250. * 250.)
+                && transform.position.xz().length_squared() < (270. * 270.));
 
         let velocity: [f32; 3] = rocket.velocity.into();
 
@@ -67,10 +74,15 @@ pub fn check_rocket_collisions_system(
                 rapier3d::prelude::InteractionGroups::all(),
                 Some(&|c| c != rapier_collider.0),
             )
-            .is_some();
+            .is_some()
+            || hit_worm;
+
+        if hit_worm {
+            worm.rockets_hit += 1;
+        }
         if hit_something {
             commands.add_component(*entity, ToDespawn);
-            explosion_manager.new_explosion(transform.position, 5.0);
+            explosion_manager.new_explosion(transform.position, 100.0);
         }
     }
 }

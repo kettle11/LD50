@@ -68,7 +68,7 @@ impl ExplosionManager {
         let mut random = Random::new();
 
         for ExplosionData { center, scale } in self.explosions_queue.drain(..) {
-            for _ in 0..random.range_u32(2..4) {
+            for _ in 0..random.range_u32(2..8) {
                 spawn_piece(
                     &self.colors,
                     random.range_u32(3..30),

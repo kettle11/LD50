@@ -1,3 +1,5 @@
+use rapier3d::parry::query::TOIStatus;
+
 use crate::rocket::spawn_rocket;
 use crate::*;
 
@@ -7,6 +9,7 @@ pub struct CharacterController {
     grapple_line: Entity,
     grapple_position: Option<(Vec3, f32)>,
     extra_jumps: usize,
+    pub can_shoot: bool,
 }
 
 #[derive(Component, Clone)]
@@ -18,7 +21,7 @@ pub struct GrappleLine;
 #[derive(Component, Clone)]
 pub struct CharacterControllerCamera;
 
-pub const MAX_EXTRA_JUMPS: usize = 3;
+pub const MAX_EXTRA_JUMPS: usize = 2;
 
 impl CharacterController {
     pub fn new(world: &mut World) -> Self {
@@ -39,7 +42,13 @@ impl CharacterController {
             )),
             grapple_position: None,
             extra_jumps: MAX_EXTRA_JUMPS,
+            can_shoot: false,
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.grapple_position = None;
+        self.extra_jumps = MAX_EXTRA_JUMPS;
     }
 
     pub fn fixed_update(
@@ -61,6 +70,12 @@ impl CharacterController {
     ) {
         for (transform, character_controller, rigid_body, rapier_collider) in controlled.iter_mut()
         {
+            game_state.player_max_height = transform.position.y.max(game_state.player_max_height);
+
+            if game_state.victory {
+                return;
+            }
+
             if transform.position.y < 0.0 {
                 rigid_body.gravity_scale = -4.0;
             } else {
@@ -71,22 +86,26 @@ impl CharacterController {
                 &rapier_physics.rigid_body_set,
                 &rapier_physics.collider_set,
             );
-            let grounded = rapier_physics
-                .query_pipeline
-                .cast_shape(
-                    &rapier_physics.collider_set,
-                    &Isometry::translation(
-                        transform.position.x,
-                        transform.position.y,
-                        transform.position.z,
-                    ),
-                    &[0.0, -1.0, 0.0].into(),
-                    &rapier3d::prelude::Ball::new(1.0),
-                    0.3,
-                    rapier3d::prelude::InteractionGroups::all(),
-                    Some(&|c| c != rapier_collider.0),
-                )
-                .is_some();
+            let grounded = rapier_physics.query_pipeline.cast_shape(
+                &rapier_physics.collider_set,
+                &Isometry::translation(
+                    transform.position.x,
+                    transform.position.y,
+                    transform.position.z,
+                ),
+                &[0.0, -1.0, 0.0].into(),
+                &rapier3d::prelude::Ball::new(1.0),
+                0.3,
+                rapier3d::prelude::InteractionGroups::all(),
+                Some(&|c| c != rapier_collider.0),
+            );
+
+            if let Some(v) = grounded {
+                let toi = v.1;
+                //println!("TOI: {:?}", toi);
+            }
+
+            let grounded = grounded.is_some();
 
             if grounded {
                 character_controller.extra_jumps = MAX_EXTRA_JUMPS;
@@ -104,7 +123,7 @@ impl CharacterController {
 
             if character_controller.grapple_position.is_some() {
                 acceleration = 0.2;
-                max = 0.8;
+                max = 12.0;
             }
             let mut forward = camera_transform.forward();
 
@@ -164,7 +183,7 @@ impl CharacterController {
                 &rapier_physics.collider_set,
             );
 
-            let grapple_distance = 30.0;
+            let grapple_distance = 300.0;
             let ray_cast = rapier_physics.query_pipeline.cast_ray(
                 &rapier_physics.collider_set,
                 &ray,
@@ -175,20 +194,31 @@ impl CharacterController {
             );
             game_state.can_grapple = ray_cast.is_some();
 
-            if input.pointer_button_down(PointerButton::Secondary) {
-                /*
-                if let Some(result) = ray_cast {
-                    let position = camera_ray.get_point(result.1);
-                    explosion_manager.new_explosion(position, 5.0);
+            if character_controller.can_shoot {
+                if input.pointer_button_down(PointerButton::Secondary) {
+                    /*
+                    if let Some(result) = ray_cast {
+                        let position = camera_ray.get_point(result.1);
+                        explosion_manager.new_explosion(position, 5.0);
+                    }
+                    */
+                    println!("SPAWNING ROCKET");
+                    spawn_rocket(
+                        commands,
+                        camera_transform.position,
+                        camera_transform.forward(),
+                    )
                 }
-                */
-                println!("SPAWNING ROCKET");
-                spawn_rocket(
-                    commands,
-                    camera_transform.position,
-                    camera_transform.forward(),
-                )
             }
+
+            /*
+            // Hardcoded location for rocket powerup.
+            if (transform.position - (Vec3::Y * 3191.0)).length() < 1.0 {
+                println!("COLLECTED POWERUP");
+                character_controller.can_shoot = true;
+            }
+            */
+
             if input.pointer_button_down(PointerButton::Primary) {
                 if let Some(result) = ray_cast {
                     let position = camera_ray.get_point(result.1);
@@ -232,10 +262,10 @@ impl CharacterController {
                 character_controller.extra_jumps = MAX_EXTRA_JUMPS;
                 let diff = *grapple_position - transform.position;
                 let dir_normalized = diff.normalized();
-                rigid_body.velocity += dir_normalized * 0.2;
+                rigid_body.velocity += dir_normalized * 0.4;
                 rigid_body.velocity += camera_transform.forward() * 0.1;
 
-                let max_grapple_velocity = 25.0;
+                let max_grapple_velocity = 80.0;
                 if rigid_body.velocity.length() > max_grapple_velocity {
                     rigid_body.velocity = rigid_body.velocity.normalized() * max_grapple_velocity;
                 }

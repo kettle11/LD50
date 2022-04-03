@@ -13,6 +13,12 @@ impl MouseLook {
             rotation_sensitivity: 0.005,
         }
     }
+    pub fn unlock(&mut self, app: &mut KappApplication) {
+        app.set_cursor_visible(true);
+        self.mouse_lock = false;
+        app.unlock_mouse_position();
+    }
+
     pub fn fixed_update(
         mut mouse_look: Query<(&mut Transform, &mut Self)>,
         app: &mut KappApplication,

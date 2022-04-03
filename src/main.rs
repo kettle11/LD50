@@ -1,6 +1,8 @@
 #![feature(portable_simd)]
 
+mod ui;
 use koi::*;
+pub use ui::*;
 
 #[derive(Component, Clone)]
 struct Controlled;
@@ -26,17 +28,22 @@ mod find_flat_parts;
 mod terrain_generator;
 
 mod worm;
+use worm::*;
 
 #[derive(Component, Clone)]
 pub struct GameState {
     game_mode: GameMode,
     can_grapple: bool,
+    needs_reset: bool,
+    player_max_height: f32,
+    victory: bool,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 enum GameMode {
     Title,
     Game,
+    GameOver,
 }
 
 fn scale_world_root(
@@ -75,28 +82,39 @@ fn prepare_model_world(world: &mut World, scale: Vec3) {
 
 fn main() {
     App::new().setup_and_run(|world: &mut World| {
-        let environment_size = 200.;
         // Setup things here.
 
-        // Spawn a camera and make it look towards the origin.
+        let mut camera = Camera::new();
+        camera.clear_color = Some(Color::WHITE);
+        let mut controls = CameraControls::new();
+        controls.max_speed *= 100.;
 
-        // world.spawn((
-        //     Transform::new()
-        //         .with_position(Vec3::new(0.0, 200.0, 3.0))
-        //         .looking_at(Vec3::fill(environment_size) / 2.0, Vec3::Y),
-        //     Camera::new(),
-        //     CameraControls::new(),
-        // ));
+        //Spawn a camera and make it look towards the origin
+        let title_camera = world.spawn((
+            Transform::new()
+                .with_position(Vec3::new(-847.27747, 111.74761, -594.119))
+                .with_rotation(Quat::from_xyzw(
+                    -0.11213023,
+                    0.8636663,
+                    -0.2205305,
+                    -0.43913826,
+                )),
+            camera,
+            // controls,
+        ));
 
         world.spawn(GameState {
             game_mode: GameMode::Title,
             can_grapple: false,
+            needs_reset: false,
+            player_max_height: 0.0,
+            victory: false,
         });
 
         let size_xz = 64;
 
-        //let mut terrain_meshes = Vec::new();
-        let mut terrain = Terrain::new(size_xz, 1024);
+        let mut terrain = Terrain::new(size_xz, 512);
+        terrain.create_chunks(world);
 
         world.spawn((
             Color::YELLOW,
@@ -104,10 +122,9 @@ fn main() {
             Transform::new().with_scale(Vec3::fill(30.0)),
             Material::DEFAULT,
         ));
-        //let mut terrain_chunks = Vec::new();
 
-        // Spawn a chunk of the world
-        terrain.create_chunks(world);
+        let mut player_camera_entity = None;
+        //let mut terrain_chunks = Vec::new();
 
         /*
         for i in 0..2 {k
@@ -140,36 +157,10 @@ fn main() {
         }
         */
 
-        spawn_skybox(world, "assets/venice_sunset.hdr");
+        spawn_reflection_probe(world, "assets/venice_sunset.hdr");
 
         let sounds = world.get_singleton::<Assets<Sound>>();
         let upbeat_vibes_song = sounds.load("assets/upbeat_vibes.wav");
-
-        // Setup the player
-        let mut player_audio_source = AudioSource::new();
-        //player_audio_source.play(&upbeat_vibes_song, true);
-        let camera = world.spawn((
-            Transform::new().with_position(Vec3::Y * 1.0),
-            Camera::new(),
-            CharacterControllerCamera,
-            Listener::new(),
-            MouseLook::new(),
-            player_audio_source,
-        ));
-
-        // Setup the player
-        let character_controller = CharacterController::new(world);
-        let character_parent = world.spawn((
-            Transform::new().with_position(Vec3::Y * 100.0 + Vec3::X * environment_size / 2.0),
-            Collider::Sphere(1.0),
-            RigidBody::new(RigidBodyInner {
-                kinematic: false,
-                can_rotate: (false, false, false),
-                ..Default::default()
-            }),
-            character_controller,
-        ));
-        set_parent(world, Some(character_parent), camera);
 
         world.spawn(RapierPhysicsManager::new());
 
@@ -184,7 +175,7 @@ fn main() {
 
         let mut standard_context = StandardContext::new(
             StandardStyle {
-                primary_text_color: Color::INTERNATIONAL_ORANGE,
+                primary_text_color: Color::WHITE,
                 primary_color: Color::BLACK.with_alpha(0.5),
                 padding: 12.,
                 ..Default::default()
@@ -193,58 +184,8 @@ fn main() {
             fonts,
         );
 
-        let mut ui = stack((
-            conditional(
-                |world: &mut World, _| {
-                    world.get_singleton::<GameState>().game_mode == GameMode::Title
-                },
-                center(text("The Last Sky Pirate").with_size(|_, _, _| 100.)),
-            ),
-            conditional(
-                |world: &mut World, _| {
-                    world.get_singleton::<GameState>().game_mode != GameMode::Title
-                },
-                stack((
-                    center(stack((
-                        rectangle(Vec2::fill(4.0)),
-                        fill(|world: &mut World, _, _| {
-                            if world.get_singleton::<GameState>().can_grapple {
-                                Color::WHITE
-                            } else {
-                                Color::BLACK
-                            }
-                        }),
-                    ))),
-                    align(
-                        Alignment::End,
-                        Alignment::End,
-                        padding(
-                            text(|world: &mut World| {
-                                use num_format::{Locale, WriteFormatted};
+        let mut ui = get_ui();
 
-                                let player_position =
-                                    (|player_transform: (&Transform, &CharacterController)| {
-                                        player_transform.0.position
-                                    })
-                                    .run(world);
-                                // if player_position.y > 0.0 {
-                                let mut writer = String::new();
-                                let _ = writer.write_formatted(
-                                    &(player_position.y.floor() as i32),
-                                    &Locale::en,
-                                );
-                                format!("{} m", writer)
-                                //} else {
-                                //    String::new()
-                                //}
-                            })
-                            .with_size(|_, _, _| 50.)
-                            .with_color(|_, _, _| Color::BLACK.with_lightness(0.3)),
-                        ),
-                    ),
-                )),
-            ),
-        ));
         world.spawn((Transform::new(), Camera::new_for_user_interface()));
 
         let worlds = world.get_singleton::<Assets<World>>();
@@ -359,12 +300,67 @@ fn main() {
                     })),
                 },
             ),
+            worlds.load_with_options(
+                "assets/rocket.glb",
+                LoadWorldOptions {
+                    run_on_world: Some(Box::new(|world: &mut World| {
+                        let mut commands = Commands::new();
+
+                        (|transform: Query<&mut Transform>| {
+                            for (e, _) in transform.entities_and_components().next() {
+                                commands.add_component(
+                                    *e,
+                                    Powerup {
+                                        grants_rockets: true,
+                                        collected: false,
+                                    },
+                                )
+                            }
+                        })
+                        .run(world);
+                        commands.apply(world);
+                        prepare_model_world(world, Vec3::fill(2.0));
+                    })),
+                },
+            ),
         ];
+
+        // Setup the water plane
+        let water_material = (|materials: &mut Assets<Material>| {
+            materials.add(new_pbr_material(
+                Shader::PHYSICALLY_BASED_TRANSPARENT_DOUBLE_SIDED,
+                PBRProperties {
+                    roughness: 0.02,
+                    base_color: Color::new_from_bytes(7, 80, 97, 200),
+                    ..Default::default()
+                },
+            ))
+        })
+        .run(world);
+
+        world.spawn((
+            Transform::new().with_scale(Vec3::fill(10000.)),
+            Mesh::PLANE,
+            water_material.clone(),
+            RenderFlags::DEFAULT.with_layer(RenderFlags::DO_NOT_CAST_SHADOWS),
+        ));
+
+        world.spawn((
+            Transform::new()
+                .with_position(Vec3::Y * -1000.0)
+                .with_scale(Vec3::fill(1000000.)),
+            Mesh::PLANE,
+            Color::BLACK,
+            RenderFlags::DEFAULT.with_layer(RenderFlags::DO_NOT_CAST_SHADOWS),
+        ));
 
         ExplosionManager::setup_system(world);
 
+        let mut random = Random::new_with_seed(13);
+
+        let mut camera_rotation_angle: f32 = 0.0;
+
         let mut loaded = false;
-        let mut setup = false;
         move |event: Event, world: &mut World| {
             match event {
                 Event::KappEvent(event) => {
@@ -372,24 +368,16 @@ fn main() {
                         return true;
                     }
                     match event {
-                        KappEvent::KeyDown { key: Key::I, .. } => {
-                            terrain.regenerate_chunk(world, Vec3u::ZERO);
-                            /*
-                            let new_mesh =
-                                (|graphics: &mut Graphics, meshes: &mut Assets<Mesh>| {
-                                    let generated_chunk_mesh =
-                                        terrain.create_chunk_mesh(Vec3u::ZERO, size_xz);
-                                    let has_at_least_one_triangle =
-                                        !generated_chunk_mesh.indices.is_empty();
-                                    (
-                                        meshes.add(Mesh::new(graphics, generated_chunk_mesh)),
-                                        has_at_least_one_triangle,
-                                    )
-                                })
-                                .run(world);
-                            *world.get_component_mut(terrain_chunks[0]).unwrap() = new_mesh.0;
-                            */
+                        KappEvent::PointerDown { .. } | KappEvent::KeyDown { .. } => {
+                            let world_state = world.get_singleton::<GameState>();
+                            match world_state.game_mode {
+                                GameMode::GameOver | GameMode::Title => {
+                                    world_state.needs_reset = true;
+                                }
+                                _ => {}
+                            }
                         }
+
                         _ => {}
                     }
                 }
@@ -407,37 +395,95 @@ fn main() {
                     .run(world);
 
                     // Start the game.
+
                     (|game_state: &mut GameState, input: &Input| {
                         if input.key_down(Key::Space) {
                             game_state.game_mode = GameMode::Game
                         }
-                        if input.key_down(Key::T) {
-                            game_state.game_mode = GameMode::Title
-                        }
+                        // if input.key_down(Key::T) {
+                        //     game_state.game_mode = GameMode::Title
+                        // }
                     })
                     .run(world);
 
-                    if loaded && !setup {
-                        setup = true;
-                        // Setup the water plane
-                        let water_material = (|materials: &mut Assets<Material>| {
-                            materials.add(new_pbr_material(
-                                Shader::PHYSICALLY_BASED_TRANSPARENT_DOUBLE_SIDED,
-                                PBRProperties {
-                                    roughness: 0.02,
-                                    base_color: Color::new_from_bytes(7, 80, 97, 200),
-                                    ..Default::default()
-                                },
-                            ))
-                        })
-                        .run(world);
+                    let needs_setup = &mut world.get_singleton::<GameState>().needs_reset;
+                    if loaded && *needs_setup {
+                        println!("RESETTING");
+                        *needs_setup = false;
 
-                        world.spawn((
-                            Transform::new().with_scale(Vec3::fill(10000.)),
-                            Mesh::PLANE,
-                            water_material.clone(),
-                            RenderFlags::DEFAULT.with_layer(RenderFlags::DO_NOT_CAST_SHADOWS),
-                        ));
+                        let mut commands = Commands::new();
+
+                        // (|rigid_bodies: Query<
+                        //     &mut RapierRigidBody,
+                        //     Without<CharacterController>,
+                        // >| {
+                        //     for (entity, _) in rigid_bodies.entities_and_components() {
+                        //         commands.add_component(*entity, ToDespawn);
+                        //     }
+                        // })
+                        // .run(world);
+                        commands.apply(world);
+
+                        let game_state = world.get_singleton::<GameState>();
+                        game_state.game_mode = GameMode::Game;
+                        game_state.player_max_height = 0.0;
+
+                        println!("SETTING UP");
+
+                        // Setup the player
+
+                        let mut setup_already = false;
+                        // Reset or spawn the player
+                        let player_start_transform = Transform::new()
+                            .with_position(Vec3::new(38.728767, 3000., 22.055452))
+                            .with_rotation(Quat::from_angle_axis(
+                                std::f32::consts::TAU * 0.3,
+                                Vec3::Y,
+                            ));
+                        if (|player: (&mut CharacterController, &mut Transform, &mut RigidBody)| {
+                            *player.1 = player_start_transform;
+                            player.2.velocity = Vec3::ZERO;
+                            player.2.mutated_position = true;
+                            player.2.mutated_velocity = true;
+                            player.0.reset();
+                            setup_already = true;
+                        })
+                        .try_run(world)
+                        .is_err()
+                        {
+                            let mut player_audio_source = AudioSource::new();
+                            //player_audio_source.play(&upbeat_vibes_song, true);
+                            let camera = world.spawn((
+                                Transform::new().with_position(Vec3::Y * 1.0),
+                                {
+                                    let mut camera = Camera::new();
+                                    camera.clear_color = Some(Color::WHITE);
+                                    camera.enabled = false;
+                                    camera
+                                },
+                                CharacterControllerCamera,
+                                Listener::new(),
+                                MouseLook::new(),
+                                player_audio_source,
+                            ));
+
+                            player_camera_entity = Some(camera);
+
+                            // Setup the player
+                            let character_controller = CharacterController::new(world);
+
+                            let character_parent = world.spawn((
+                                player_start_transform,
+                                Collider::Sphere(1.0),
+                                RigidBody::new(RigidBodyInner {
+                                    kinematic: false,
+                                    can_rotate: (false, false, false),
+                                    ..Default::default()
+                                }),
+                                character_controller,
+                            ));
+                            set_parent(world, Some(character_parent), camera);
+                        }
 
                         /*
                         world.spawn((
@@ -452,109 +498,205 @@ fn main() {
                         ));
                         */
 
-                        let mut commands = Commands::new();
+                        reset_powerups.run(world);
 
-                        (|worlds: &mut Assets<World>| {
-                            let mut random = Random::new();
-                            for _ in 0..50 {
-                                let v = random.f32();
-                                let random_position = Vec3::new(
-                                    random.f32() * environment_size,
-                                    random.f32() * 100.0 + 50.,
-                                    random.f32() * environment_size,
-                                );
-                                if v > 0.3 {
-                                    let mut boat = worlds.get_mut(&models[0]).clone_world();
+                        if !setup_already {
+                            setup_worm(world);
 
-                                    (|transform: &mut Transform| {
-                                        transform.position = random_position;
-                                        transform.rotation = Quat::from_angle_axis(
-                                            random.f32() * std::f32::consts::TAU,
-                                            Vec3::Y,
-                                        );
-                                    })
-                                    .run(&mut boat);
+                            (|worlds: &mut Assets<World>| {
+                                let mut rocket = worlds.get_mut(&models[4]).clone_world();
 
-                                    commands.add_world(boat);
+                                (|transform: &mut Transform| {
+                                    transform.position = Vec3::Y * 3191.0;
+                                })
+                                .run(&mut rocket);
 
-                                    // Spawn some barrels on top
-                                    for _ in 0..3 {
-                                        let mut barrel = worlds.get_mut(&models[2]).clone_world();
+                                commands.add_world(rocket);
 
-                                        let random_offset = Vec3::new(
-                                            random.f32() * 2.0 - 1.0 - 4.0,
-                                            7.0,
-                                            random.f32() * 2.0 - 1.0 - 4.0,
-                                        );
+                                for _ in 0..300 {
+                                    let v = random.f32();
+                                    let random_position = Vec3::new(
+                                        random.f32() * terrain.scale,
+                                        random.f32() * 3000.0 + 50.,
+                                        random.f32() * terrain.scale,
+                                    ) - Vec3::new(
+                                        terrain.scale / 2.0,
+                                        0.0,
+                                        terrain.scale / 2.0,
+                                    );
+                                    if v > 0.3 {
+                                        let mut boat = worlds.get_mut(&models[0]).clone_world();
+
                                         (|transform: &mut Transform| {
-                                            transform.position = random_position + random_offset;
+                                            transform.position = random_position;
+                                            transform.rotation = Quat::from_angle_axis(
+                                                random.f32() * std::f32::consts::TAU,
+                                                Vec3::Y,
+                                            );
+                                        })
+                                        .run(&mut boat);
+
+                                        commands.add_world(boat);
+
+                                        // Spawn some barrels on top
+                                        for _ in 0..3 {
+                                            let mut barrel =
+                                                worlds.get_mut(&models[2]).clone_world();
+
+                                            let random_offset = Vec3::new(
+                                                random.f32() * 2.0 - 1.0 - 4.0,
+                                                7.0,
+                                                random.f32() * 2.0 - 1.0 - 4.0,
+                                            );
+                                            (|transform: &mut Transform| {
+                                                transform.position =
+                                                    random_position + random_offset;
+
+                                                transform.rotation = Quat::from_angle_axis(
+                                                    random.f32() * std::f32::consts::TAU,
+                                                    Vec3::Y,
+                                                );
+                                            })
+                                            .run(&mut barrel);
+
+                                            commands.add_world(barrel);
+                                        }
+                                    } else {
+                                        let mut boat = worlds.get_mut(&models[1]).clone_world();
+
+                                        (|transform: &mut Transform| {
+                                            transform.position = random_position;
 
                                             transform.rotation = Quat::from_angle_axis(
                                                 random.f32() * std::f32::consts::TAU,
                                                 Vec3::Y,
                                             );
                                         })
-                                        .run(&mut barrel);
+                                        .run(&mut boat);
 
-                                        commands.add_world(barrel);
-                                    }
-                                } else {
-                                    let mut boat = worlds.get_mut(&models[1]).clone_world();
+                                        commands.add_world(boat);
 
-                                    (|transform: &mut Transform| {
-                                        transform.position = random_position;
+                                        // Spawn some barrels on top
+                                        for _ in 0..3 {
+                                            let mut barrel =
+                                                worlds.get_mut(&models[2]).clone_world();
 
-                                        transform.rotation = Quat::from_angle_axis(
-                                            random.f32() * std::f32::consts::TAU,
-                                            Vec3::Y,
-                                        );
-                                    })
-                                    .run(&mut boat);
-
-                                    commands.add_world(boat);
-
-                                    // Spawn some barrels on top
-                                    for _ in 0..3 {
-                                        let mut barrel = worlds.get_mut(&models[2]).clone_world();
-
-                                        let random_range = 4.0;
-                                        let random_offset = Vec3::new(
-                                            random.f32() * random_range - random_range / 2.0 - 4.0,
-                                            7.0,
-                                            random.f32() * random_range - random_range / 2.0 - 4.0,
-                                        );
-                                        (|transform: &mut Transform| {
-                                            transform.position = random_position + random_offset;
-
-                                            transform.rotation = Quat::from_angle_axis(
-                                                random.f32() * std::f32::consts::TAU,
-                                                Vec3::Y,
+                                            let random_range = 4.0;
+                                            let random_offset = Vec3::new(
+                                                random.f32() * random_range
+                                                    - random_range / 2.0
+                                                    - 4.0,
+                                                7.0,
+                                                random.f32() * random_range
+                                                    - random_range / 2.0
+                                                    - 4.0,
                                             );
-                                        })
-                                        .run(&mut barrel);
+                                            (|transform: &mut Transform| {
+                                                transform.position =
+                                                    random_position + random_offset;
 
-                                        commands.add_world(barrel);
+                                                transform.rotation = Quat::from_angle_axis(
+                                                    random.f32() * std::f32::consts::TAU,
+                                                    Vec3::Y,
+                                                );
+                                            })
+                                            .run(&mut barrel);
+
+                                            commands.add_world(barrel);
+                                        }
                                     }
                                 }
-                            }
+                            })
+                            .run(world);
+                        }
+                        (|(worm_transform, worm): (&mut Transform, &mut Worm)| {
+                            worm_transform.position = Vec3::Y * -200.0;
+                            worm.lerp_target = Some(3000.0);
+                            worm.rockets_hit = 0;
                         })
                         .run(world);
+
                         commands.apply(world);
+
+                        update_root_global_transforms.run(world);
+                        update_global_transforms.run(world);
+                        apply_commands(world);
                     }
 
-                    if setup {
-                        ExplosionManager::fixed_update_system.run(world);
-                        MouseLook::fixed_update.run(world);
-                        CharacterController::fixed_update.run(world);
-                        RapierPhysicsManager::despawn.run(world);
-                        RapierPhysicsManager::fixed_update(world);
-                        check_rocket_collisions_system.run(world);
+                    let game_state = world.get_singleton::<GameState>();
 
-                        worm::run_worm(world);
+                    match game_state.game_mode {
+                        GameMode::Game => {
+                            world
+                                .get_component_mut::<Camera>(title_camera)
+                                .unwrap()
+                                .enabled = false;
+                            if let Some(player_camera_entity) = player_camera_entity {
+                                let transform = *world
+                                    .get_component_mut::<GlobalTransform>(player_camera_entity)
+                                    .unwrap();
+                                let camera = world
+                                    .get_component_mut::<Camera>(player_camera_entity)
+                                    .unwrap();
+                                // Blend the color towards blue
+                                camera.clear_color = Some(Color::interpolate(
+                                    Color::WHITE,
+                                    Color::AZURE.with_chroma(0.4),
+                                    (transform.position.y / 3191.0).clamp(0.0, 1.0),
+                                ));
+                                camera.enabled = true;
+                            }
+                            ExplosionManager::fixed_update_system.run(world);
+                            MouseLook::fixed_update.run(world);
+                            CharacterController::fixed_update.run(world);
+                            RapierPhysicsManager::despawn.run(world);
+                            RapierPhysicsManager::fixed_update(world);
+                            collect_powerups.run(world);
+                            check_rocket_collisions_system.run(world);
+                            worm::run_worm(world);
+                        }
+                        GameMode::GameOver => {
+                            println!("UNLOCKING MOUSE");
+                            MouseLook::unlock.run(world);
+                        }
+                        GameMode::Title => {
+                            RapierPhysicsManager::despawn.run(world);
+                            RapierPhysicsManager::fixed_update(world);
+                            world
+                                .get_component_mut::<Camera>(title_camera)
+                                .unwrap()
+                                .enabled = true;
+                            if let Some(player_camera_entity) = player_camera_entity {
+                                world
+                                    .get_component_mut::<Camera>(player_camera_entity)
+                                    .unwrap()
+                                    .enabled = false;
+                            }
+
+                            let camera_transform =
+                                world.get_component_mut::<Transform>(title_camera).unwrap();
+                            let distance = 500.0;
+                            let (sin, cos) = camera_rotation_angle.sin_cos();
+                            camera_rotation_angle += 0.0004;
+                            let y_offset = camera_rotation_angle * 5.0 * Vec3::Y;
+                            *camera_transform = camera_transform
+                                .with_position(Vec3::new(cos, 0.0, sin) * distance + y_offset)
+                                .looking_at(Vec3::Y * 750.0 + y_offset, Vec3::Y);
+                        }
+                        _ => {}
                     }
                     // Perform physics and game related updates here.
                 }
                 Event::Draw => {
+                    /*
+                    (|cameras: Query<(&Transform, &Camera)>| {
+                        for camera in cameras.iter() {
+                            if camera.1.enabled {
+                                println!("TRANSFORM: {:?}", camera.0);
+                            }
+                        }
+                    }).run(world);
+                    */
                     Cable::update_meshes_system.run(world);
 
                     ui_manager.prepare(world, &mut standard_context);
@@ -568,4 +710,36 @@ fn main() {
             false
         }
     });
+}
+
+#[derive(Component, Clone)]
+pub struct Powerup {
+    collected: bool,
+    grants_rockets: bool,
+}
+fn collect_powerups(
+    (player_transform, character_controller): (&GlobalTransform, &mut CharacterController),
+    mut powerups: Query<(&mut Transform, &mut Powerup)>,
+) {
+    for powerup in powerups.iter_mut() {
+        if !powerup.1.collected {
+            if (powerup.0.position - player_transform.position).length() < 4.0 {
+                println!("COLLECT POWERUP");
+                powerup.1.collected = true;
+
+                // Cheap way to hide it
+                powerup.0.scale = Vec3::ZERO;
+                if powerup.1.grants_rockets {
+                    character_controller.can_shoot = true;
+                }
+            }
+        }
+    }
+}
+
+fn reset_powerups(mut powerups: Query<(&mut Transform, &mut Powerup)>) {
+    for powerup in powerups.iter_mut() {
+        powerup.1.collected = false;
+        powerup.0.scale = Vec3::ZERO;
+    }
 }

@@ -52,7 +52,7 @@ where
 
 impl Terrain {
     pub fn new(size_xz: usize, size_y: usize) -> Self {
-        let scale = 250.;
+        let scale = 450.;
         let mut terrain = Self {
             scale,
             size_xz,
@@ -90,7 +90,7 @@ impl Terrain {
 
                     let mut sample = 0.0;
                     {
-                        let p = p / 100.0 + Vec3::fill(2000.);
+                        let p = p / 300.0 + Vec3::fill(2000.);
 
                         sample = (sample_with_octaves::<8>(&mut noise, persistence, p.x, p.y, p.z)
                             * 1.3) as f32;
@@ -125,20 +125,24 @@ impl Terrain {
                         0.0
                     };
 
-                    if (j as f32 * size_per_tile) > top * 0.8 {
-                        sample = 0.0;
-                    }
-
                     // Height density
                     let j_asf32 = j as f32;
                     let percent_to_top = j_asf32 / top;
                     let density = ((1.0 - percent_to_top)
                         * (percent_to_top * std::f32::consts::TAU * 4.0).sin())
-                    .max(0.2);
+                    .max(0.4);
+
+                    if (j as f32 * size_per_tile) > top * 0.8 {
+                        sample = -1.0;
+                        if v < 0.003 && (j as f32 * size_per_tile) < top * 0.9 {
+                            sample = 1.0;
+                        }
+                    }
+
                     let sample = sample * density;
 
                     //  println!("SCALE FACTOR: {:?}", scale_factor);
-                    let v = sample - scale_factor as f32;
+                    let v = sample - scale_factor as f32 - 0.02;
                     /*
                     if p.x > 100.0 {
                         sample = 1.0
@@ -281,7 +285,7 @@ impl<'a> isosurface::source::ScalarSource for TerrainSampler<'a> {
 
         let index = i * self.size_xz * self.size_y + j * (self.size_xz) + k;
         if index > self.values.len() - 1 {
-            return isosurface::distance::Signed(0.0);
+            return isosurface::distance::Signed(-1.0);
 
             //  println!("P: {:?}", p);
         }
