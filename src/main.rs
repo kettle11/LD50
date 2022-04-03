@@ -15,8 +15,13 @@ pub use character_controller::*;
 mod explosion_manager;
 use explosion_manager::*;
 use rocket::check_rocket_collisions_system;
+use terrain_generator::generate_chunk;
 
 mod rocket;
+
+mod find_flat_parts;
+
+mod terrain_generator;
 
 #[derive(Component, Clone)]
 pub struct GameState {
@@ -71,20 +76,34 @@ fn main() {
 
         // Spawn a camera and make it look towards the origin.
 
-        /*
-        world.spawn((
-            Transform::new()
-                .with_position(Vec3::new(0.0, 4.0, 3.0))
-                .looking_at(Vec3::ZERO, Vec3::Y),
-            Camera::new(),
-            CameraControls::new(),
-        ));
-        */
+        // world.spawn((
+        //     Transform::new()
+        //         .with_position(Vec3::new(0.0, 200.0, 3.0))
+        //         .looking_at(Vec3::fill(environment_size) / 2.0, Vec3::Y),
+        //     Camera::new(),
+        //     CameraControls::new(),
+        // ));
 
         world.spawn(GameState {
             game_mode: GameMode::Title,
             can_grapple: false,
         });
+
+        // Spawn a chunk of the world
+        let mut offset = 0;
+        for _ in 0..5 {
+            let world_chunk_mesh = (|graphics: &mut Graphics, meshes: &mut Assets<Mesh>| {
+                meshes.add(Mesh::new(graphics, generate_chunk(Vec3::Y * offset as f32)))
+            })
+            .run(world);
+            world.spawn((
+                world_chunk_mesh,
+                Material::DEFAULT,
+                Transform::new(),
+                Collider::AttachedMesh,
+            ));
+            offset += 64;
+        }
 
         spawn_skybox(world, "assets/venice_sunset.hdr");
 
@@ -106,7 +125,7 @@ fn main() {
         // Setup the player
         let character_controller = CharacterController::new(world);
         let character_parent = world.spawn((
-            Transform::new().with_position(Vec3::Y * 100.0 + Vec3::XZ * environment_size / 2.0),
+            Transform::new().with_position(Vec3::Y * 100.0 + Vec3::X * environment_size / 2.0),
             Collider::Sphere(0.5),
             RigidBody::new(RigidBodyInner {
                 kinematic: false,

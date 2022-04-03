@@ -196,6 +196,12 @@ impl RapierPhysicsManager {
         for (entity, (transform, collider, rapier_rigid_body, mesh_handle)) in
             needs_collider_query.entities_and_components()
         {
+            // This is a standalone collider without a position.
+            let p: [f32; 3] = transform.position.into();
+            let rotation: [f32; 4] = transform.rotation.into();
+            let position_isometry =
+                Isometry::from_parts(p.into(), UnitQuaternion::from_quaternion(rotation.into()));
+
             let scale = transform.scale;
             let mut collider = match collider {
                 Collider::Cuboid(extents) => rapier3d::prelude::ColliderBuilder::cuboid(
@@ -249,7 +255,9 @@ impl RapierPhysicsManager {
                             mesh_data.indices.clone(),
                         )
                     });
-                    rapier3d::prelude::ColliderBuilder::new(shared_shape.clone()).build()
+                    rapier3d::prelude::ColliderBuilder::new(shared_shape.clone())
+                        .position(position_isometry)
+                        .build()
                 }
                 Collider::AttachedMeshConvexDecomposition => {
                     let mesh_handle = mesh_handle.unwrap();
@@ -337,8 +345,8 @@ impl RapierPhysicsManager {
         // Update the transform of rigid bodies that have moved.
         for (transform, rigid_body, rigid_body_koi) in rigid_body_query.iter_mut() {
             if self.rigid_body_set.contains(rigid_body.0) {
-                if transform.position.length() > 1000.0 {
-                    // println!("DESPAWNING");
+                if transform.position.length() > 100_000.0 {
+                    println!("DESPAWNING RAPIER RIGID BODY");
                     self.rigid_body_set.remove(
                         rigid_body.0,
                         &mut self.island_manager,

@@ -7,4 +7,6 @@ edition = "2021"
 
 [dependencies]
 rapier3d = {version = "0.11.1"}
+noise = {default-features=false, version="0.7.0"}
+isosurface = {git = "https://github.com/swiftcoder/isosurface.git", revision="b4b95b3"}
 koi = {path = "../koi2", default-features=false, features=["gltf", "jpeg", "png", "graphics", "renderer", "ui", "hdri", "audio"]}

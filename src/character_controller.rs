@@ -147,10 +147,12 @@ impl CharacterController {
                 &rapier_physics.rigid_body_set,
                 &rapier_physics.collider_set,
             );
+
+            let grapple_distance = 30.0;
             let ray_cast = rapier_physics.query_pipeline.cast_ray(
                 &rapier_physics.collider_set,
                 &ray,
-                50.0,
+                grapple_distance,
                 false,
                 rapier3d::prelude::InteractionGroups::all(),
                 Some(&|c| c != rapier_collider.0),
