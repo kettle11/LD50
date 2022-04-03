@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use noise::NoiseFn;
-
 use crate::*;
 
 pub struct Terrain {
