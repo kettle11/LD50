@@ -15,6 +15,43 @@ pub struct Terrain {
     world_offset: Vec3,
 }
 
+fn sample_with_octaves<const LANES: usize>(
+    noise: &mut clatter::Simplex3d,
+    persistence: f32,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> f32
+where
+    std::simd::LaneCount<LANES>: std::simd::SupportedLaneCount,
+{
+    let mut frequency = 1.0;
+    let mut amplitude = 1.0;
+    let mut max_value = 0.0;
+
+    let mut amplitudes: [f32; LANES] = [0.0; LANES];
+    let mut frequencies: [f32; LANES] = [0.0; LANES];
+
+    for i in 0..LANES {
+        amplitudes[i] = amplitude;
+        frequencies[i] = frequency;
+
+        max_value += amplitude;
+        amplitude *= persistence;
+        frequency *= 2.0;
+    }
+
+    let amplitudes = core::simd::Simd::<f32, LANES>::from_array(amplitudes);
+    let frequencies = core::simd::Simd::<f32, LANES>::from_array(frequencies);
+    let sample = noise.sample([
+        core::simd::Simd::<f32, LANES>::splat(x) * frequencies,
+        core::simd::Simd::<f32, LANES>::splat(y) * frequencies,
+        core::simd::Simd::<f32, LANES>::splat(z) * frequencies,
+    ]) * amplitudes;
+
+    sample.value.reduce_sum() / max_value
+}
+
 impl Terrain {
     pub fn new(size_xz: usize, size_y: usize) -> Self {
         let scale = 200.;
@@ -34,7 +71,9 @@ impl Terrain {
     pub fn generate_height_data(&mut self) {
         let scale = self.scale;
 
-        let noise = noise::Perlin::new();
+        // let noise = noise::Perlin::new();
+        let mut noise = clatter::Simplex3d::new();
+
         let radius_squared = (scale / 2.0) * (scale / 2.0);
         let center = Vec3::fill(scale) / 2.0;
 
@@ -46,15 +85,17 @@ impl Terrain {
             for j in 0..self.size_y {
                 for k in 0..self.size_xz {
                     let p = Vec3::new(i as f32, j as f32, k as f32) * size_per_tile + offset;
-                    let persistence = 0.5;
-                    let mut frequency = 1.0;
-                    let mut amplitude = 1.0;
-                    let mut max_value = 0.0;
+                    let persistence = 0.45;
 
                     let mut sample = 0.0;
                     {
                         let p = p / 100.0 + Vec3::fill(2000.);
 
+                        sample = (sample_with_octaves::<8>(&mut noise, persistence, p.x, p.y, p.z)
+                            * 1.3) as f32;
+
+                        // println!("SAMPLE: {:?}", sample);
+                        /*
                         for _ in 0..5 {
                             let p = p * frequency;
                             sample += noise.get([p.x as f64, p.y as f64, p.z as f64]) * amplitude;
@@ -62,7 +103,7 @@ impl Terrain {
                             max_value += amplitude;
                             amplitude *= persistence;
                             frequency *= 2.0;
-                        }
+                        }*/
                     }
 
                     // println!("SAMPLE: {:?}", sample);
@@ -79,7 +120,7 @@ impl Terrain {
                         0.0
                     };
                     //  println!("SCALE FACTOR: {:?}", scale_factor);
-                    let v = (sample / max_value) - scale_factor;
+                    let v = sample - scale_factor as f32;
                     /*
                     if p.x > 100.0 {
                         sample = 1.0

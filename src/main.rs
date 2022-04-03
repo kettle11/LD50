@@ -1,3 +1,5 @@
+#![feature(portable_simd)]
+
 use koi::*;
 
 #[derive(Component, Clone)]
