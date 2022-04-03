@@ -241,6 +241,7 @@ impl<'a> isosurface::source::ScalarSource for TerrainSampler<'a> {
 struct Extractor {
     mesh_data: MeshData,
     indices: [u32; 3],
+    positions: Vec<Vec3>,
     index: usize,
     scale: f32,
     offset: Vec3,
@@ -248,6 +249,7 @@ struct Extractor {
 impl Extractor {
     pub fn new(scale: f32, offset: Vec3) -> Self {
         Self {
+            positions: Vec::new(),
             mesh_data: MeshData::new(),
             indices: [0, 0, 0],
             index: 0,
@@ -259,6 +261,8 @@ impl Extractor {
 
 impl isosurface::extractor::Extractor for Extractor {
     fn extract_vertex(&mut self, vertex: isosurface::math::Vec3) {
+        self.positions
+            .push(Vec3::new(vertex.x, vertex.y, vertex.z) * self.scale + self.offset);
         self.mesh_data
             .positions
             .push(Vec3::new(vertex.x, vertex.y, vertex.z) * self.scale + self.offset);
@@ -268,7 +272,15 @@ impl isosurface::extractor::Extractor for Extractor {
         self.indices[self.index] = index as u32;
         self.index += 1;
         if self.index == 3 {
-            self.mesh_data.indices.push(self.indices);
+            // Make the mesh flat shaded
+            // Normals could be calculated here as well!
+            let offset = self.mesh_data.positions.len() as u32;
+            for i in self.indices {
+                self.mesh_data.positions.push(self.positions[i as usize]);
+            }
+            self.mesh_data
+                .indices
+                .push([offset, offset + 1, offset + 2]);
             self.index = 0;
         }
     }
