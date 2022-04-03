@@ -81,7 +81,7 @@ impl CharacterController {
                         transform.position.z,
                     ),
                     &[0.0, -1.0, 0.0].into(),
-                    &rapier3d::prelude::Ball::new(0.5),
+                    &rapier3d::prelude::Ball::new(1.0),
                     0.3,
                     rapier3d::prelude::InteractionGroups::all(),
                     Some(&|c| c != rapier_collider.0),
@@ -235,7 +235,7 @@ impl CharacterController {
                     + camera_transform.down() * 0.2;
                 cable.end = *grapple_position;
 
-                if diff.length() < 0.3 || jumped {
+                if diff.length() < 1.3 || jumped {
                     character_controller.grapple_position = None;
                     rigid_body.gravity_scale = 1.0;
                     cable.start = Vec3::ZERO;

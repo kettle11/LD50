@@ -91,14 +91,15 @@ fn main() {
 
         let size_xz = 128;
 
-        let mut terrain_meshes = Vec::new();
+        //let mut terrain_meshes = Vec::new();
         let mut terrain = Terrain::new(size_xz, 512);
 
-        let mut terrain_chunks = Vec::new();
+        //let mut terrain_chunks = Vec::new();
 
         // Spawn a chunk of the world
-        let mut offset_y = 0;
-        let world_offset = -Vec3::Y * 50.0;
+        terrain.create_chunks(world);
+
+        /*
         for i in 0..2 {
             let (world_chunk_mesh, has_at_least_one_triangle) =
                 (|graphics: &mut Graphics, meshes: &mut Assets<Mesh>| {
@@ -127,6 +128,7 @@ fn main() {
             }
             offset_y += size_xz;
         }
+        */
 
         spawn_skybox(world, "assets/venice_sunset.hdr");
 
@@ -332,6 +334,8 @@ fn main() {
                     }
                     match event {
                         KappEvent::KeyDown { key: Key::I, .. } => {
+                            terrain.regenerate_chunk(world, Vec3u::ZERO);
+                            /*
                             let new_mesh =
                                 (|graphics: &mut Graphics, meshes: &mut Assets<Mesh>| {
                                     let generated_chunk_mesh =
@@ -345,6 +349,7 @@ fn main() {
                                 })
                                 .run(world);
                             *world.get_component_mut(terrain_chunks[0]).unwrap() = new_mesh.0;
+                            */
                         }
                         _ => {}
                     }

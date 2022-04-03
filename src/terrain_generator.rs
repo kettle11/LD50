@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use noise::NoiseFn;
 use noise::Perlin;
 
@@ -9,6 +11,9 @@ pub struct Terrain {
     size_y: usize,
     values: Vec<f32>,
     mesh_normal_calculator: MeshNormalCalculator,
+    chunk_size: usize,
+    chunks: HashMap<Vec3u, Entity>,
+    world_offset: Vec3,
 }
 
 impl Terrain {
@@ -19,6 +24,9 @@ impl Terrain {
             size_y,
             values: vec![0.0; size_xz * size_xz * size_y],
             mesh_normal_calculator: MeshNormalCalculator::new(),
+            chunk_size: 32,
+            chunks: HashMap::new(),
+            world_offset: -Vec3::Y * 50.0,
         };
         terrain.generate_height_data();
         terrain
@@ -90,7 +98,7 @@ impl Terrain {
     }
 
     pub fn create_chunk_mesh(&mut self, offset: Vec3u, samples: usize) -> MeshData {
-        println!("SIZE Y: {:?}", self.size_y);
+        //println!("SIZE Y: {:?}", self.size_y);
         let terrain_sampler = TerrainSampler {
             offset,
             values: &self.values,
@@ -102,7 +110,8 @@ impl Terrain {
         let mut chunk = isosurface::MarchingCubes::new(samples);
         let sampler = isosurface::sampler::Sampler::new(&terrain_sampler);
 
-        let mut extractor = Extractor::new(self.scale, Vec3::ZERO);
+        let scale = (samples as f32 / self.size_xz as f32) * self.scale;
+        let mut extractor = Extractor::new(scale, Vec3::ZERO);
 
         chunk.extract(&sampler, &mut extractor);
         let mut mesh_data = extractor.mesh_data;
@@ -110,6 +119,54 @@ impl Terrain {
         self.mesh_normal_calculator
             .calculate_normals(&mut mesh_data);
         mesh_data
+    }
+
+    pub fn regenerate_chunk(&mut self, world: &mut World, chunk: Vec3u) {
+        let mut to_spawn = Vec::new();
+
+        (|graphics: &mut Graphics, meshes: &mut Assets<Mesh>| {
+            let mesh_data = self.create_chunk_mesh(chunk * self.chunk_size, self.chunk_size);
+            let has_a_tri = !mesh_data.indices.is_empty();
+            let mesh = meshes.add(Mesh::new(graphics, mesh_data));
+
+            if has_a_tri {
+                to_spawn.push((
+                    chunk,
+                    (
+                        mesh,
+                        Material::DEFAULT,
+                        Transform::new().with_position(
+                            (chunk.as_f32() * self.chunk_size as f32) / self.size_xz as f32
+                                * self.scale
+                                + self.world_offset,
+                        ),
+                        Collider::AttachedMesh,
+                    ),
+                ));
+            }
+        })
+        .run(world);
+
+        for (key, to_spawn) in to_spawn {
+            if let Some(replacing) = self.chunks.insert(key, world.spawn(to_spawn)) {
+                let _ = world.despawn(replacing);
+            }
+        }
+    }
+
+    pub fn create_chunks(&mut self, world: &mut World) {
+        println!("CHUNKS: {:?}", self.size_y as f32 / self.chunk_size as f32);
+        let chunks_y = self.size_y / self.chunk_size;
+        let chunks_xz = self.size_xz / self.chunk_size;
+
+        for i in 0..chunks_xz {
+            for j in 0..chunks_y {
+                for k in 0..chunks_xz {
+                    let chunk = Vec3u::new(i, j, k);
+                    self.regenerate_chunk(world, chunk);
+                }
+            }
+        }
     }
 }
 
@@ -159,12 +216,14 @@ struct TerrainSampler<'a> {
 
 impl<'a> isosurface::source::ScalarSource for TerrainSampler<'a> {
     fn sample_scalar(&self, p: isosurface::math::Vec3) -> isosurface::distance::Signed {
-        let i = (p.x * (self.size_xz - 1) as f32) as usize + self.offset.x;
+        let i = (p.x * (self.samples) as f32) as usize + self.offset.x;
         let j = (p.y * (self.samples) as f32) as usize + self.offset.y;
-        let k = (p.z * (self.size_xz - 1) as f32) as usize + self.offset.z;
+        let k = (p.z * (self.samples) as f32) as usize + self.offset.z;
 
         let index = i * self.size_xz * self.size_y + j * (self.size_xz) + k;
         if index > self.values.len() - 1 {
+            return isosurface::distance::Signed(0.0);
+
             //  println!("P: {:?}", p);
         }
 
