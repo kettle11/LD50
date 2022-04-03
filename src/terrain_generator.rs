@@ -52,7 +52,7 @@ where
 
 impl Terrain {
     pub fn new(size_xz: usize, size_y: usize) -> Self {
-        let scale = 200.;
+        let scale = 250.;
         let mut terrain = Self {
             scale,
             size_xz,
@@ -79,11 +79,14 @@ impl Terrain {
 
         let size_per_tile = scale / self.size_xz as f32;
         let mut index = 0;
+
+        let top = size_per_tile * self.size_y as f32;
+
         for i in 0..self.size_xz {
             for j in 0..self.size_y {
                 for k in 0..self.size_xz {
                     let p = Vec3::new(i as f32, j as f32, k as f32) * size_per_tile + offset;
-                    let persistence = 0.45;
+                    let persistence = 0.5;
 
                     let mut sample = 0.0;
                     {
@@ -113,10 +116,27 @@ impl Terrain {
 
                     let v = distance_from_center / radius_squared;
                     let scale_factor = if v > 0.7 {
-                        ((v - 0.7) / 0.3).clamp(0.0, 1.0) as f64
+                        // println!("V: {:?}", v);
+                        let clamp = ((v - 0.7) / 0.3).clamp(0.0, 1.0) as f64;
+
+                        // println!("CLAMP: {:?}", clamp);
+                        clamp
                     } else {
                         0.0
                     };
+
+                    if (j as f32 * size_per_tile) > top * 0.8 {
+                        sample = 0.0;
+                    }
+
+                    // Height density
+                    let j_asf32 = j as f32;
+                    let percent_to_top = j_asf32 / top;
+                    let density = ((1.0 - percent_to_top)
+                        * (percent_to_top * std::f32::consts::TAU * 4.0).sin())
+                    .max(0.2);
+                    let sample = sample * density;
+
                     //  println!("SCALE FACTOR: {:?}", scale_factor);
                     let v = sample - scale_factor as f32;
                     /*

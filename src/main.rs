@@ -93,10 +93,10 @@ fn main() {
             can_grapple: false,
         });
 
-        let size_xz = 128;
+        let size_xz = 64;
 
         //let mut terrain_meshes = Vec::new();
-        let mut terrain = Terrain::new(size_xz, 512);
+        let mut terrain = Terrain::new(size_xz, 1024);
 
         world.spawn((
             Color::YELLOW,
@@ -110,7 +110,7 @@ fn main() {
         terrain.create_chunks(world);
 
         /*
-        for i in 0..2 {
+        for i in 0..2 {k
             let (world_chunk_mesh, has_at_least_one_triangle) =
                 (|graphics: &mut Graphics, meshes: &mut Assets<Mesh>| {
                     let generated_chunk_mesh =
