@@ -194,16 +194,45 @@ fn main() {
                 |world: &mut World, _| {
                     world.get_singleton::<GameState>().game_mode != GameMode::Title
                 },
-                center(stack((
-                    rectangle(Vec2::fill(4.0)),
-                    fill(|world: &mut World, _, _| {
-                        if world.get_singleton::<GameState>().can_grapple {
-                            Color::WHITE
-                        } else {
-                            Color::BLACK
-                        }
-                    }),
-                ))),
+                stack((
+                    center(stack((
+                        rectangle(Vec2::fill(4.0)),
+                        fill(|world: &mut World, _, _| {
+                            if world.get_singleton::<GameState>().can_grapple {
+                                Color::WHITE
+                            } else {
+                                Color::BLACK
+                            }
+                        }),
+                    ))),
+                    align(
+                        Alignment::End,
+                        Alignment::End,
+                        padding(
+                            text(|world: &mut World| {
+                                use num_format::{Locale, WriteFormatted};
+
+                                let player_position =
+                                    (|player_transform: (&Transform, &CharacterController)| {
+                                        player_transform.0.position
+                                    })
+                                    .run(world);
+                                // if player_position.y > 0.0 {
+                                let mut writer = String::new();
+                                let _ = writer.write_formatted(
+                                    &(player_position.y.floor() as i32),
+                                    &Locale::en,
+                                );
+                                format!("{} m", writer)
+                                //} else {
+                                //    String::new()
+                                //}
+                            })
+                            .with_size(|_, _, _| 50.)
+                            .with_color(|_, _, _| Color::BLACK.with_lightness(0.3)),
+                        ),
+                    ),
+                )),
             ),
         ));
         world.spawn((Transform::new(), Camera::new_for_user_interface()));

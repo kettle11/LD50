@@ -273,7 +273,7 @@ impl isosurface::extractor::Extractor for Extractor {
         self.index += 1;
         if self.index == 3 {
             // Make the mesh flat shaded
-            // Normals could be calculated here as well!
+            // Normals could be calculated here as
             let offset = self.mesh_data.positions.len() as u32;
             for i in self.indices {
                 self.mesh_data.positions.push(self.positions[i as usize]);
