@@ -61,6 +61,11 @@ impl CharacterController {
     ) {
         for (transform, character_controller, rigid_body, rapier_collider) in controlled.iter_mut()
         {
+            if transform.position.y < 0.0 {
+                rigid_body.gravity_scale = -4.0;
+            } else {
+                rigid_body.gravity_scale = 1.0;
+            }
             rapier_physics.query_pipeline.update(
                 &rapier_physics.island_manager,
                 &rapier_physics.rigid_body_set,
