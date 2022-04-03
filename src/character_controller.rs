@@ -92,23 +92,34 @@ impl CharacterController {
                 character_controller.extra_jumps = MAX_EXTRA_JUMPS;
             }
 
+            let mut max = 6.0;
+
             let ground_acceleration = 0.2;
             let air_acceleration = 0.1;
-            let acceleration = if grounded {
+            let mut acceleration = if grounded {
                 ground_acceleration
             } else {
                 air_acceleration
             };
+
+            if character_controller.grapple_position.is_some() {
+                acceleration = 0.2;
+                max = 0.8;
+            }
             let mut forward = camera_transform.forward();
-            forward.y = 0.0;
-            forward = forward.normalized();
+
+            if character_controller.grapple_position.is_none() {
+                forward.y = 0.0;
+                forward = forward.normalized();
+            }
 
             let mut right = camera_transform.right();
-            right.y = 0.0;
-            right = right.normalized();
+            if character_controller.grapple_position.is_none() {
+                right.y = 0.0;
+                right = right.normalized();
+            }
 
             let horizontal_velocity = Vec3::new(rigid_body.velocity.x, 0.0, rigid_body.velocity.z);
-            let max = 6.0;
 
             if input.key(Key::W) && horizontal_velocity.dot(forward) < max {
                 rigid_body.velocity += forward * acceleration;
