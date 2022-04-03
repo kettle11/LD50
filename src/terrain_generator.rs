@@ -3,20 +3,142 @@ use noise::Perlin;
 
 use crate::*;
 
-pub fn generate_chunk(offset: Vec3) -> MeshData {
+pub struct Terrain {
+    pub scale: f32,
+    size_xz: usize,
+    size_y: usize,
+    values: Vec<f32>,
+    mesh_normal_calculator: MeshNormalCalculator,
+}
+
+impl Terrain {
+    pub fn new(size_xz: usize, size_y: usize) -> Self {
+        let mut terrain = Self {
+            scale: 200.,
+            size_xz,
+            size_y,
+            values: vec![0.0; size_xz * size_xz * size_y],
+            mesh_normal_calculator: MeshNormalCalculator::new(),
+        };
+        terrain.generate_height_data();
+        terrain
+    }
+    pub fn generate_height_data(&mut self) {
+        let scale = self.scale;
+
+        let noise = noise::Perlin::new();
+        let radius_squared = (scale / 2.0) * (scale / 2.0);
+        let center = Vec3::fill(scale) / 2.0;
+
+        let offset = Vec3::ZERO;
+
+        let size_per_tile = scale / self.size_xz as f32;
+        let mut index = 0;
+        for i in 0..self.size_xz {
+            for j in 0..self.size_y {
+                for k in 0..self.size_xz {
+                    let p = Vec3::new(i as f32, j as f32, k as f32) * size_per_tile + offset;
+                    let persistence = 0.5;
+                    let mut frequency = 1.0;
+                    let mut amplitude = 1.0;
+                    let mut max_value = 0.0;
+
+                    let mut sample = 0.0;
+                    {
+                        let p = p / 100.0 + Vec3::fill(2000.);
+
+                        for _ in 0..5 {
+                            let p = p * frequency;
+                            sample += noise.get([p.x as f64, p.y as f64, p.z as f64]) * amplitude;
+
+                            max_value += amplitude;
+                            amplitude *= persistence;
+                            frequency *= 2.0;
+                        }
+                    }
+
+                    // println!("SAMPLE: {:?}", sample);
+                    // println!("P: {:?}", p);
+
+                    let p = p - center;
+                    let distance_from_center = p.xz().length_squared();
+                    //  println!("DISTANCE FROM CENTER: {:?}", distance_from_center);
+
+                    let v = distance_from_center / radius_squared;
+                    let scale_factor = if v > 0.7 {
+                        ((v - 0.7) / 0.3).clamp(0.0, 1.0) as f64
+                    } else {
+                        0.0
+                    };
+                    //  println!("SCALE FACTOR: {:?}", scale_factor);
+                    let v = (sample / max_value) - scale_factor;
+                    /*
+                    if p.x > 100.0 {
+                        sample = 1.0
+                    } else {
+                        sample = -1.0;
+                    }
+                    */
+
+                    self.values[index] = v as f32;
+                    // values[i * (size * size) + j * size + k] = v;
+                    index += 1;
+                }
+            }
+        }
+        //let values = calculate_values(scale, offset, size, center, radius_squared, &noise);
+    }
+
+    pub fn create_chunk_mesh(&mut self, offset: Vec3u, samples: usize) -> MeshData {
+        println!("SIZE Y: {:?}", self.size_y);
+        let terrain_sampler = TerrainSampler {
+            offset,
+            values: &self.values,
+            size_xz: self.size_xz,
+            size_y: self.size_y,
+            samples,
+        };
+
+        let mut chunk = isosurface::MarchingCubes::new(samples);
+        let sampler = isosurface::sampler::Sampler::new(&terrain_sampler);
+
+        let mut extractor = Extractor::new(self.scale, Vec3::ZERO);
+
+        chunk.extract(&sampler, &mut extractor);
+        let mut mesh_data = extractor.mesh_data;
+        // println!("MESH DATA: {:#?}", mesh_data);
+        self.mesh_normal_calculator
+            .calculate_normals(&mut mesh_data);
+        mesh_data
+    }
+}
+
+/*
+pub fn generate_chunk(offset_y: usize) -> MeshData {
     let scale = 200.;
     let noise = noise::Perlin::new();
-    let terrain_sampler = TerrainSampler {
+    let radius_squared = (scale / 2.0) * (scale / 2.0);
+    let center = Vec3::fill(scale) / 2.0;
+    /* let terrain_sampler = TerrainSampler {
         noise,
         scale,
         radius_squared: (scale / 2.0) * (scale / 2.0),
         center: Vec3::fill(scale) / 2.0,
         offset,
     };
-    let mut chunk = isosurface::MarchingCubes::new(64);
+    */
+    let offset = Vec3::Y * offset_y as f32 * scale;
+    let size = 128;
+    let values = calculate_values(scale, offset, size, center, radius_squared, &noise);
+    let terrain_sampler = TerrainSampler {
+        values: &values,
+        size,
+    };
+
+    let mut chunk = isosurface::MarchingCubes::new(128);
     let sampler = isosurface::sampler::Sampler::new(&terrain_sampler);
 
-    let mut extractor = Extractor::new(scale, (scale / 64.0) * offset);
+    let mut extractor = Extractor::new(scale, offset);
 
     chunk.extract(&sampler, &mut extractor);
     let mut mesh_normal_calculator = MeshNormalCalculator::new();
@@ -25,44 +147,35 @@ pub fn generate_chunk(offset: Vec3) -> MeshData {
     mesh_normal_calculator.calculate_normals(&mut mesh_data);
     mesh_data
 }
+*/
 
-struct TerrainSampler {
-    noise: Perlin,
-    scale: f32,
-    radius_squared: f32,
-    center: Vec3,
-    offset: Vec3,
+struct TerrainSampler<'a> {
+    size_xz: usize,
+    size_y: usize,
+    offset: Vec3u,
+    values: &'a [f32],
+    samples: usize,
 }
 
-impl isosurface::source::ScalarSource for TerrainSampler {
+impl<'a> isosurface::source::ScalarSource for TerrainSampler<'a> {
     fn sample_scalar(&self, p: isosurface::math::Vec3) -> isosurface::distance::Signed {
-        let persistence = 0.5;
-        let mut frequency = 1.0;
-        let mut amplitude = 1.0;
-        let mut max_value = 0.0;
+        let i = (p.x * (self.size_xz - 1) as f32) as usize + self.offset.x;
+        let j = (p.y * (self.samples) as f32) as usize + self.offset.y;
+        let k = (p.z * (self.size_xz - 1) as f32) as usize + self.offset.z;
 
-        let mut sample = 0.0;
-        let p = Vec3::new(p.x, p.y, p.z) + self.offset;
-        for _ in 0..6 {
-            let p = p * 4.0 + Vec3::fill(2000.);
-            let p = p * frequency;
-            sample += self.noise.get([p.x as f64, p.y as f64, p.z as f64]) * amplitude;
-
-            max_value += amplitude;
-            amplitude *= persistence;
-            frequency *= 2.0;
+        let index = i * self.size_xz * self.size_y + j * (self.size_xz) + k;
+        if index > self.values.len() - 1 {
+            //  println!("P: {:?}", p);
         }
 
-        let p = p * self.scale - self.center;
-
-        let distance_from_center = p.xz().length_squared();
-        //  println!("DISTANCE FROM CENTER: {:?}", distance_from_center);
-
-        let scale_factor = (distance_from_center / self.radius_squared).clamp(0.0, 1.0) as f64;
-        //  println!("SCALE FACTOR: {:?}", scale_factor);
-        let sample = (sample / max_value + 0.1) - scale_factor;
-
-        isosurface::distance::Signed(sample as f32)
+        /*let v = if self.values[i * (self.size * self.size) + j * self.size + k] == 0 {
+            -1.0
+        } else {
+            1.0
+        };*/
+        let v = self.values[index];
+        //  println!("V: {:?}", v);
+        isosurface::distance::Signed(v)
     }
 }
 

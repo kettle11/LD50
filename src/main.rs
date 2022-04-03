@@ -15,7 +15,7 @@ pub use character_controller::*;
 mod explosion_manager;
 use explosion_manager::*;
 use rocket::check_rocket_collisions_system;
-use terrain_generator::generate_chunk;
+use terrain_generator::*;
 
 mod rocket;
 
@@ -89,20 +89,43 @@ fn main() {
             can_grapple: false,
         });
 
+        let size_xz = 128;
+
+        let mut terrain_meshes = Vec::new();
+        let mut terrain = Terrain::new(size_xz, 512);
+
+        let mut terrain_chunks = Vec::new();
+
         // Spawn a chunk of the world
-        let mut offset = 0;
-        for _ in 0..5 {
-            let world_chunk_mesh = (|graphics: &mut Graphics, meshes: &mut Assets<Mesh>| {
-                meshes.add(Mesh::new(graphics, generate_chunk(Vec3::Y * offset as f32)))
-            })
-            .run(world);
-            world.spawn((
-                world_chunk_mesh,
-                Material::DEFAULT,
-                Transform::new(),
-                Collider::AttachedMesh,
-            ));
-            offset += 64;
+        let mut offset_y = 0;
+        let world_offset = -Vec3::Y * 50.0;
+        for i in 0..2 {
+            let (world_chunk_mesh, has_at_least_one_triangle) =
+                (|graphics: &mut Graphics, meshes: &mut Assets<Mesh>| {
+                    let generated_chunk_mesh =
+                        terrain.create_chunk_mesh(Vec3u::new(0, offset_y, 0), size_xz);
+                    let has_at_least_one_triangle = !generated_chunk_mesh.indices.is_empty();
+                    (
+                        meshes.add(Mesh::new(graphics, generated_chunk_mesh)),
+                        has_at_least_one_triangle,
+                    )
+                })
+                .run(world);
+
+            terrain_meshes.push(world_chunk_mesh.clone());
+            if has_at_least_one_triangle {
+                terrain_chunks.push(world.spawn((
+                    world_chunk_mesh,
+                    Material::DEFAULT,
+                    Transform::new().with_position(
+                        Vec3::Y * (offset_y as f32 / size_xz as f32) * terrain.scale + world_offset,
+                    ),
+                    Collider::AttachedMesh,
+                )));
+            } else {
+                println!("EMPTY CHUNK!");
+            }
+            offset_y += size_xz;
         }
 
         spawn_skybox(world, "assets/venice_sunset.hdr");
@@ -126,7 +149,7 @@ fn main() {
         let character_controller = CharacterController::new(world);
         let character_parent = world.spawn((
             Transform::new().with_position(Vec3::Y * 100.0 + Vec3::X * environment_size / 2.0),
-            Collider::Sphere(0.5),
+            Collider::Sphere(1.0),
             RigidBody::new(RigidBodyInner {
                 kinematic: false,
                 can_rotate: (false, false, false),
@@ -281,7 +304,7 @@ fn main() {
                                     RigidBody::new(RigidBodyInner {
                                         kinematic: false,
                                         can_rotate: (true, true, true),
-                                        gravity_scale: 0.01,
+                                        gravity_scale: 0.1,
                                         linear_damping: 0.0,
                                         angular_damping: 0.0,
                                         velocity: Vec3::ZERO,
@@ -306,6 +329,24 @@ fn main() {
                 Event::KappEvent(event) => {
                     if ui_manager.handle_event(&event, world, &mut standard_context) {
                         return true;
+                    }
+                    match event {
+                        KappEvent::KeyDown { key: Key::I, .. } => {
+                            let new_mesh =
+                                (|graphics: &mut Graphics, meshes: &mut Assets<Mesh>| {
+                                    let generated_chunk_mesh =
+                                        terrain.create_chunk_mesh(Vec3u::ZERO, size_xz);
+                                    let has_at_least_one_triangle =
+                                        !generated_chunk_mesh.indices.is_empty();
+                                    (
+                                        meshes.add(Mesh::new(graphics, generated_chunk_mesh)),
+                                        has_at_least_one_triangle,
+                                    )
+                                })
+                                .run(world);
+                            *world.get_component_mut(terrain_chunks[0]).unwrap() = new_mesh.0;
+                        }
+                        _ => {}
                     }
                 }
                 Event::FixedUpdate => {
@@ -348,7 +389,7 @@ fn main() {
                         .run(world);
 
                         world.spawn((
-                            Transform::new().with_scale(Vec3::fill(1000000.)),
+                            Transform::new().with_scale(Vec3::fill(10000.)),
                             Mesh::PLANE,
                             water_material.clone(),
                             RenderFlags::DEFAULT.with_layer(RenderFlags::DO_NOT_CAST_SHADOWS),

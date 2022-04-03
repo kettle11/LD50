@@ -270,8 +270,10 @@ impl Cable {
         mut cables: Query<(&mut Handle<Mesh>, &Cable)>,
     ) {
         for (mesh, cable) in cables.iter_mut() {
-            *meshes.get_mut(mesh) =
-                Mesh::new(graphics, cylinder(cable.start, cable.end, 6, cable.radius));
+            *mesh = meshes.add(Mesh::new(
+                graphics,
+                cylinder(cable.start, cable.end, 6, cable.radius),
+            ));
         }
     }
 }
