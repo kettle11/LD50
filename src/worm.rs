@@ -83,8 +83,16 @@ pub fn run_worm(world: &mut World) {
 
     // Move the worm
 
-    (|(transform, _worm): (&mut Transform, &Worm)| {
-        transform.position.y += 0.1;
+    (|(transform, _worm): (&mut Transform, &Worm),
+      player: (&GlobalTransform, &CharacterController)| {
+        transform.position.y += 0.13;
+
+        let player_diff = player.0.position.y - (transform.position.y - 120.0);
+
+        println!("PLAYER DIFF: {:?}", player_diff);
+        if player_diff < 0.0 {
+            println!("PLAYER LOSES");
+        }
     })
     .run(world);
 }
