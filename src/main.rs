@@ -459,7 +459,7 @@ fn main() {
                         .try_run(world)
                         .is_err()
                         {
-                            let mut player_audio_source = AudioSource::new();
+                            let player_audio_source = AudioSource::new().with_volume(0.2);
 
                             let camera = world.spawn((
                                 Transform::new().with_position(Vec3::Y * 1.0),
