@@ -150,6 +150,18 @@ pub fn run_worm(world: &mut World) {
                     worm.lerp_target = Some(3800.);
                 }
 
+                if player.0.position.y > 1300. {
+                    worm.lerp_target = Some(1000.);
+                }
+
+                if player.0.position.y > 2300. {
+                    worm.lerp_target = Some(2000.);
+                }
+
+                if player.0.position.y > 3000. {
+                    worm.lerp_target = Some(3000.);
+                }
+
                 let player_diff = player.0.position.y - (transform.position.y - 120.0);
 
                 // transform.position.y = player.0.position.y - 100.;
