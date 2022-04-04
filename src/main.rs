@@ -161,6 +161,7 @@ fn main() {
 
         let sounds = world.get_singleton::<Assets<Sound>>();
         let upbeat_vibes_song = sounds.load("assets/upbeat_vibes.wav");
+        //let shoot_grapple_sound = sounds.load("assets/shoot_grapple.wav");
 
         world.spawn(RapierPhysicsManager::new());
 
@@ -313,6 +314,7 @@ fn main() {
                                     Powerup {
                                         grants_rockets: true,
                                         collected: false,
+                                        grants_cable_length: false,
                                     },
                                 )
                             }
@@ -361,6 +363,12 @@ fn main() {
         let mut camera_rotation_angle: f32 = 0.0;
 
         let mut loaded = false;
+
+        let low_poly_uv_sphere = (|meshes: &mut Assets<Mesh>, graphics: &mut Graphics| {
+            meshes.add(Mesh::new(graphics, uv_sphere(4, 4, Vec2::ONE)))
+        })
+        .run(world);
+
         move |event: Event, world: &mut World| {
             match event {
                 Event::KappEvent(event) => {
@@ -452,7 +460,7 @@ fn main() {
                         .is_err()
                         {
                             let mut player_audio_source = AudioSource::new();
-                            //player_audio_source.play(&upbeat_vibes_song, true);
+
                             let camera = world.spawn((
                                 Transform::new().with_position(Vec3::Y * 1.0),
                                 {
@@ -481,6 +489,7 @@ fn main() {
                                     ..Default::default()
                                 }),
                                 character_controller,
+                                AudioSource::new(),
                             ));
                             set_parent(world, Some(character_parent), camera);
                         }
@@ -501,6 +510,28 @@ fn main() {
                         reset_powerups.run(world);
 
                         if !setup_already {
+                            for _ in 0..150 {
+                                let random_position =
+                                    Vec3::new(
+                                        random.f32() * terrain.scale,
+                                        random.f32() * 2000.0 + 50.,
+                                        random.f32() * terrain.scale,
+                                    ) - Vec3::new(terrain.scale / 2.0, 0.0, terrain.scale / 2.0);
+                                world.spawn((
+                                    Transform::new()
+                                        .with_position(random_position)
+                                        .with_scale(Vec3::fill(8.0)),
+                                    low_poly_uv_sphere.clone(),
+                                    Collider::Sphere(0.5),
+                                    Color::from_srgb_hex(0xFFD700, 1.0),
+                                    Material::UNLIT,
+                                    Powerup {
+                                        collected: false,
+                                        grants_rockets: false,
+                                        grants_cable_length: true,
+                                    },
+                                ));
+                            }
                             setup_worm(world);
 
                             (|worlds: &mut Assets<World>| {
@@ -716,6 +747,7 @@ fn main() {
 pub struct Powerup {
     collected: bool,
     grants_rockets: bool,
+    grants_cable_length: bool,
 }
 fn collect_powerups(
     (player_transform, character_controller): (&GlobalTransform, &mut CharacterController),
@@ -723,7 +755,13 @@ fn collect_powerups(
 ) {
     for powerup in powerups.iter_mut() {
         if !powerup.1.collected {
-            if (powerup.0.position - player_transform.position).length() < 4.0 {
+            let l = (powerup.0.position - player_transform.position).length_squared();
+            let collected = if powerup.1.grants_cable_length {
+                l < 8.0 * 8.0
+            } else {
+                l < 4.0 * 4.0
+            };
+            if collected {
                 println!("COLLECT POWERUP");
                 powerup.1.collected = true;
 
@@ -731,6 +769,9 @@ fn collect_powerups(
                 powerup.0.scale = Vec3::ZERO;
                 if powerup.1.grants_rockets {
                     character_controller.can_shoot = true;
+                }
+                if powerup.1.grants_cable_length {
+                    character_controller.max_cable_length += 20.0;
                 }
             }
         }

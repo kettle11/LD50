@@ -179,11 +179,10 @@ impl Terrain {
         let sampler = isosurface::sampler::Sampler::new(&terrain_sampler);
 
         let scale = (samples as f32 / self.size_xz as f32) * self.scale;
-        println!("WORLD OFFSET: {:?}", world_offset);
         let mut extractor = Extractor::new(scale, Vec3::ZERO, world_offset);
 
         chunk.extract(&sampler, &mut extractor);
-        let mut mesh_data = extractor.mesh_data;
+        let mesh_data = extractor.mesh_data;
 
         // println!("NORMALS LEN: {:?}", mesh_data.normals.len());
         // println!("PSOITIONS LEN: {:?}", mesh_data.positions.len());
@@ -362,10 +361,9 @@ impl isosurface::extractor::Extractor for Extractor {
             self.mesh_data.normals.push(normal);
             self.mesh_data.normals.push(normal);
 
-            let mut color = Color::WHITE.to_linear_srgb();
+            let mut color;
 
             let p0 = p0 + self.world_offset;
-            println!("P: {:?}", p0.y);
             if p0.y > 2800. {
                 if normal.y > 0.5 {
                     color = Color::WHITE.to_linear_srgb()

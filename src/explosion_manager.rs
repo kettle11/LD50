@@ -6,6 +6,7 @@ pub struct ExplosionManager {
     explosions_queue: Vec<ExplosionData>,
     colors: Vec<Color>,
     colliders_intersected: Vec<rapier3d::prelude::ColliderHandle>,
+    explosion_sound: Handle<Sound>,
 }
 
 #[derive(Clone)]
@@ -26,6 +27,10 @@ impl ExplosionManager {
         })
         .run(world);
 
+        let explosion_sound = world
+            .get_singleton::<Assets<Sound>>()
+            .load("assets/explosion.wav");
+            
         world.spawn(Self {
             explosion_mesh: low_poly_uv_sphere,
             explosions_queue: Vec::new(),
@@ -35,6 +40,7 @@ impl ExplosionManager {
                 Color::new(204. / 255., 137. / 255., 75. / 255., 1.0),
             ],
             colliders_intersected: Vec::new(),
+            explosion_sound,
         });
     }
 

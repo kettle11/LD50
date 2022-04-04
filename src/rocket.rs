@@ -33,6 +33,7 @@ pub fn check_rocket_collisions_system(
     rapier_physics: &RapierPhysicsManager,
     explosion_manager: &mut ExplosionManager,
     mut rockets: Query<(&mut Transform, &Rocket, &RapierCollider)>,
+    sounds: &Assets<Sound>,
     time: &Time,
 ) {
     for (entity, (transform, rocket, rapier_collider)) in rockets.entities_and_components_mut() {

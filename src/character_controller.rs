@@ -9,7 +9,11 @@ pub struct CharacterController {
     grapple_line: Entity,
     grapple_position: Option<(Vec3, f32)>,
     extra_jumps: usize,
+    pub max_cable_length: f32,
     pub can_shoot: bool,
+    jump_sound: Handle<Sound>,
+    grapple_sound: Handle<Sound>,
+    wind_sound: Handle<Sound>,
 }
 
 #[derive(Component, Clone)]
@@ -25,6 +29,11 @@ pub const MAX_EXTRA_JUMPS: usize = 2;
 
 impl CharacterController {
     pub fn new(world: &mut World) -> Self {
+        let sounds = world.get_singleton::<Assets<Sound>>();
+        let jump_sound = sounds.load("assets/jump.wav");
+        let grapple_sound = sounds.load("assets/shoot_grapple.wav");
+        let wind_sound = sounds.load("assets/wind_sound.wav");
+
         Self {
             grapple_target: world.spawn((
                 Mesh::SPHERE,
@@ -40,26 +49,37 @@ impl CharacterController {
                 Color::BLACK.with_lightness(0.5),
                 Cable::new(),
             )),
+            max_cable_length: 50.0,
             grapple_position: None,
             extra_jumps: MAX_EXTRA_JUMPS,
             can_shoot: false,
+            jump_sound,
+            grapple_sound,
+            wind_sound,
         }
     }
 
     pub fn reset(&mut self) {
         self.grapple_position = None;
+        self.max_cable_length = 50.0;
         self.extra_jumps = MAX_EXTRA_JUMPS;
     }
 
     pub fn fixed_update(
         input: &Input,
         rapier_physics: &mut RapierPhysicsManager,
-        (camera_transform, _camera, _): (&GlobalTransform, &Camera, &CharacterControllerCamera),
+        (camera_transform, _camera, _, head_audio_source): (
+            &GlobalTransform,
+            &Camera,
+            &CharacterControllerCamera,
+            &mut AudioSource,
+        ),
         mut controlled: Query<(
             &mut Transform,
             &mut CharacterController,
             &mut RigidBody,
             &RapierCollider,
+            &mut AudioSource,
         )>,
         time: &Time,
         (grapple_target_transform, _): (&mut Transform, &GrappleTarget),
@@ -68,8 +88,10 @@ impl CharacterController {
         explosion_manager: &mut ExplosionManager,
         commands: &mut Commands,
     ) {
-        for (transform, character_controller, rigid_body, rapier_collider) in controlled.iter_mut()
+        for (transform, character_controller, rigid_body, rapier_collider, audio_source) in
+            controlled.iter_mut()
         {
+
             game_state.player_max_height = transform.position.y.max(game_state.player_max_height);
 
             if game_state.victory {
@@ -169,6 +191,7 @@ impl CharacterController {
                     jumped = true;
                     character_controller.extra_jumps =
                         character_controller.extra_jumps.saturating_sub(1);
+                    audio_source.play(&character_controller.jump_sound, false);
                 }
             }
 
@@ -183,7 +206,7 @@ impl CharacterController {
                 &rapier_physics.collider_set,
             );
 
-            let grapple_distance = 300.0;
+            let grapple_distance = character_controller.max_cable_length;
             let ray_cast = rapier_physics.query_pipeline.cast_ray(
                 &rapier_physics.collider_set,
                 &ray,
@@ -224,6 +247,7 @@ impl CharacterController {
                     let position = camera_ray.get_point(result.1);
 
                     println!("GRAPPLING");
+                    audio_source.play(&character_controller.grapple_sound, false);
                     grapple_target_transform.position = position;
 
                     /*
@@ -262,7 +286,7 @@ impl CharacterController {
                 character_controller.extra_jumps = MAX_EXTRA_JUMPS;
                 let diff = *grapple_position - transform.position;
                 let dir_normalized = diff.normalized();
-                rigid_body.velocity += dir_normalized * 0.4;
+                rigid_body.velocity += dir_normalized * 0.8;
                 rigid_body.velocity += camera_transform.forward() * 0.1;
 
                 let max_grapple_velocity = 80.0;
