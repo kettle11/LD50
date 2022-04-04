@@ -117,10 +117,11 @@ fn main() {
         terrain.create_chunks(world);
 
         world.spawn((
-            Color::YELLOW,
+            Color::MAJORELLE_BLUE,
             Mesh::SPHERE,
             Transform::new().with_scale(Vec3::fill(30.0)),
             Material::DEFAULT,
+            Collider::Sphere(0.5),
         ));
 
         let mut player_camera_entity = None;
@@ -377,6 +378,7 @@ fn main() {
                     }
                     match event {
                         KappEvent::PointerDown { .. } | KappEvent::KeyDown { .. } => {
+                            //klog::log!("EVENT: {:?}", event);
                             let world_state = world.get_singleton::<GameState>();
                             match world_state.game_mode {
                                 GameMode::GameOver | GameMode::Title => {
@@ -405,9 +407,11 @@ fn main() {
                     // Start the game.
 
                     (|game_state: &mut GameState, input: &Input| {
+                        /*
                         if input.key_down(Key::Space) {
                             game_state.game_mode = GameMode::Game
                         }
+                        */
                         // if input.key_down(Key::T) {
                         //     game_state.game_mode = GameMode::Title
                         // }
@@ -781,6 +785,10 @@ fn collect_powerups(
 fn reset_powerups(mut powerups: Query<(&mut Transform, &mut Powerup)>) {
     for powerup in powerups.iter_mut() {
         powerup.1.collected = false;
-        powerup.0.scale = Vec3::ZERO;
+        if powerup.1.grants_cable_length {
+            powerup.0.scale = Vec3::fill(8.0);
+        } else {
+            powerup.0.scale = Vec3::fill(2.0);
+        }
     }
 }
