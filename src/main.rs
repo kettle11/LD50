@@ -435,7 +435,7 @@ fn main() {
                         let mut setup_already = false;
                         // Reset or spawn the player
                         let player_start_transform = Transform::new()
-                            .with_position(Vec3::new(38.728767, 3000., 22.055452))
+                            .with_position(Vec3::new(38.728767, 47.28899, 22.055452))
                             .with_rotation(Quat::from_angle_axis(
                                 std::f32::consts::TAU * 0.3,
                                 Vec3::Y,
@@ -611,7 +611,7 @@ fn main() {
                         }
                         (|(worm_transform, worm): (&mut Transform, &mut Worm)| {
                             worm_transform.position = Vec3::Y * -200.0;
-                            worm.lerp_target = Some(3000.0);
+                            worm.lerp_target = None; // Some(3000.0);
                             worm.rockets_hit = 0;
                         })
                         .run(world);

@@ -160,7 +160,12 @@ impl Terrain {
         //let values = calculate_values(scale, offset, size, center, radius_squared, &noise);
     }
 
-    pub fn create_chunk_mesh(&mut self, offset: Vec3u, samples: usize) -> MeshData {
+    pub fn create_chunk_mesh(
+        &mut self,
+        offset: Vec3u,
+        samples: usize,
+        world_offset: Vec3,
+    ) -> MeshData {
         //println!("SIZE Y: {:?}", self.size_y);
         let terrain_sampler = TerrainSampler {
             offset,
@@ -174,13 +179,18 @@ impl Terrain {
         let sampler = isosurface::sampler::Sampler::new(&terrain_sampler);
 
         let scale = (samples as f32 / self.size_xz as f32) * self.scale;
-        let mut extractor = Extractor::new(scale, Vec3::ZERO);
+        println!("WORLD OFFSET: {:?}", world_offset);
+        let mut extractor = Extractor::new(scale, Vec3::ZERO, world_offset);
 
         chunk.extract(&sampler, &mut extractor);
         let mut mesh_data = extractor.mesh_data;
+
+        // println!("NORMALS LEN: {:?}", mesh_data.normals.len());
+        // println!("PSOITIONS LEN: {:?}", mesh_data.positions.len());
+
         // println!("MESH DATA: {:#?}", mesh_data);
-        self.mesh_normal_calculator
-            .calculate_normals(&mut mesh_data);
+        // self.mesh_normal_calculator
+        //     .calculate_normals(&mut mesh_data);
         mesh_data
     }
 
@@ -188,7 +198,11 @@ impl Terrain {
         let mut to_spawn = Vec::new();
 
         (|graphics: &mut Graphics, meshes: &mut Assets<Mesh>| {
-            let mesh_data = self.create_chunk_mesh(chunk * self.chunk_size, self.chunk_size);
+            let world_offset = (chunk.as_f32() * self.chunk_size as f32) / self.size_xz as f32
+                * self.scale
+                + self.world_offset;
+            let mesh_data =
+                self.create_chunk_mesh(chunk * self.chunk_size, self.chunk_size, world_offset);
             let has_a_tri = !mesh_data.indices.is_empty();
             let mesh = meshes.add(Mesh::new(graphics, mesh_data));
 
@@ -198,11 +212,7 @@ impl Terrain {
                     (
                         mesh,
                         Material::DEFAULT,
-                        Transform::new().with_position(
-                            (chunk.as_f32() * self.chunk_size as f32) / self.size_xz as f32
-                                * self.scale
-                                + self.world_offset,
-                        ),
+                        Transform::new().with_position(world_offset),
                         Collider::AttachedMesh,
                     ),
                 ));
@@ -308,9 +318,10 @@ struct Extractor {
     index: usize,
     scale: f32,
     offset: Vec3,
+    world_offset: Vec3,
 }
 impl Extractor {
-    pub fn new(scale: f32, offset: Vec3) -> Self {
+    pub fn new(scale: f32, offset: Vec3, world_offset: Vec3) -> Self {
         Self {
             positions: Vec::new(),
             mesh_data: MeshData::new(),
@@ -318,6 +329,7 @@ impl Extractor {
             index: 0,
             scale,
             offset,
+            world_offset,
         }
     }
 }
@@ -325,9 +337,6 @@ impl Extractor {
 impl isosurface::extractor::Extractor for Extractor {
     fn extract_vertex(&mut self, vertex: isosurface::math::Vec3) {
         self.positions
-            .push(Vec3::new(vertex.x, vertex.y, vertex.z) * self.scale + self.offset);
-        self.mesh_data
-            .positions
             .push(Vec3::new(vertex.x, vertex.y, vertex.z) * self.scale + self.offset);
     }
 
@@ -338,9 +347,61 @@ impl isosurface::extractor::Extractor for Extractor {
             // Make the mesh flat shaded
             // Normals could be calculated here as
             let offset = self.mesh_data.positions.len() as u32;
-            for i in self.indices {
-                self.mesh_data.positions.push(self.positions[i as usize]);
+
+            let p0 = self.positions[self.indices[0] as usize];
+            let p1 = self.positions[self.indices[1] as usize];
+            let p2 = self.positions[self.indices[2] as usize];
+
+            self.mesh_data.positions.push(p0);
+            self.mesh_data.positions.push(p1);
+            self.mesh_data.positions.push(p2);
+
+            let normal = ((p1 - p0).cross(p2 - p1)).normalized();
+
+            self.mesh_data.normals.push(normal);
+            self.mesh_data.normals.push(normal);
+            self.mesh_data.normals.push(normal);
+
+            let mut color = Color::WHITE.to_linear_srgb();
+
+            let p0 = p0 + self.world_offset;
+            println!("P: {:?}", p0.y);
+            if p0.y > 2800. {
+                if normal.y > 0.5 {
+                    color = Color::WHITE.to_linear_srgb()
+                } else {
+                    color = Color::from_srgb_hex(0xFFD700, 1.0).to_linear_srgb();
+                }
+            } else if p0.y > 2000. {
+                if normal.y > 0.5 {
+                    color = Color::OCHRE.to_linear_srgb()
+                } else {
+                    color = Color::PURPLE.with_lightness(0.8).to_linear_srgb()
+                }
+            } else if p0.y > 1000. {
+                if normal.y > 0.5 {
+                    color = Color::MINT.to_linear_srgb();
+                } else {
+                    color = Color::YELLOW
+                        .with_chroma(0.2)
+                        .with_lightness(0.8)
+                        .to_linear_srgb()
+                }
+            } else {
+                if normal.y > 0.5 {
+                    color = Color::from_srgb_hex(0x51c43f, 1.0).to_linear_srgb();
+                } else {
+                    color = Color::interpolate(Color::OCHRE, Color::BROWN, 0.7)
+                        .with_chroma(0.1)
+                        .with_lightness(0.7)
+                        .to_linear_srgb()
+                }
             }
+
+            self.mesh_data.colors.push(color);
+            self.mesh_data.colors.push(color);
+            self.mesh_data.colors.push(color);
+
             self.mesh_data
                 .indices
                 .push([offset, offset + 1, offset + 2]);
@@ -374,6 +435,7 @@ impl MeshNormalCalculator {
             self.normal_use_count[p0 as usize] += 1;
             self.normal_use_count[p1 as usize] += 1;
             self.normal_use_count[p2 as usize] += 1;
+
             mesh_data.normals[p0 as usize] += normal;
             mesh_data.normals[p1 as usize] += normal;
             mesh_data.normals[p2 as usize] += normal;
