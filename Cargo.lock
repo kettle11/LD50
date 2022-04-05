@@ -60,6 +60,9 @@ name = "bit-vec"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bitflags"
@@ -594,6 +597,7 @@ dependencies = [
  "num-complex",
  "num-rational",
  "num-traits",
+ "serde",
  "simba",
  "typenum",
 ]
@@ -622,6 +626,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26873667bbbb7c5182d4a37c1add32cdf09f841af72da53318fdb81543c15085"
 dependencies = [
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -716,18 +721,18 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "parry3d"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "067fa44bf7f7cc4022756ef9796c5f8d67c7a63041df71e6eeb09ad08ab1ece8"
+version = "0.7.0"
 dependencies = [
  "approx",
  "bitflags",
  "downcast-rs",
  "either",
+ "klog",
  "nalgebra",
  "num-derive",
  "num-traits",
  "rustc-hash",
+ "serde",
  "simba",
  "slab",
  "smallvec",
@@ -771,9 +776,7 @@ dependencies = [
 
 [[package]]
 name = "rapier3d"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfc8dde2352efdbc0813938fcc41d12651b4bb05211e81d2b44ff6c09d39b2ac"
+version = "0.11.0"
 dependencies = [
  "approx",
  "arrayvec 0.7.2",
@@ -787,6 +790,7 @@ dependencies = [
  "num-traits",
  "parry3d",
  "rustc-hash",
+ "serde",
  "simba",
 ]
 
@@ -831,6 +835,26 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+
+[[package]]
+name = "serde"
+version = "1.0.136"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce31e24b01e1e524df96f1c2fdd054405f8d7376249a5110886fb4b658484789"
+dependencies = [
+ "serde_derive",
+]
+
+[[package]]
+name = "serde_derive"
+version = "1.0.136"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08597e7152fcd306f41838ed3e37be9eaeed2b61c42e2117266a554fab4662f9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "simba"

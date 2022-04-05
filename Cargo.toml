@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rapier3d = {version = "0.11.1"}
+rapier3d = {features=["serde-serialize"], path = "../../scratchspace/rapier/build/rapier3d"}
 isosurface = {git = "https://github.com/swiftcoder/isosurface.git", revision="b4b95b3"}
 koi = {path = "../koi2", default-features=false, features=["gltf", "jpeg", "png", "graphics", "renderer", "ui", "hdri", "audio"]}
 num-format = "0.4.0"

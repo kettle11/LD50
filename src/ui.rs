@@ -47,7 +47,7 @@ pub fn get_ui() -> impl Widget<World, StandardContext<World>> {
                             let messages = [
                                 (46.0, "The Eternal Tower crumbles. Press space to jump"),
                                 (48.0, "All have fled our home. Press space again to multi-jump."),
-                                (50.0, "Aim far and click to use your grapple"),
+                                (50.0, "Click to use your grapple when your cursor turns white!"),
                                 (60.0, "Collect the yellow orbs to increase your grapple length!"),
                                 (150.0, "Alas, you must climb now! The worm has come..."),
                                 (200.0, ""),
