@@ -1,0 +1,54 @@
+[package]
+name    = "parry2d-f64"
+version = "0.7.1"
+authors = [ "Sébastien Crozet <developer@crozet.re>" ]
+
+description = "2 dimensional collision detection library in Rust. 64-bit precision version."
+documentation = "http://parry.rs/docs"
+homepage = "http://parry.rs"
+repository = "https://github.com/dimforge/parry"
+readme = "README.md"
+keywords = [ "collision", "geometry", "distance", "ray", "convex" ]
+categories = [ "science", "game-development", "mathematics", "wasm"]
+license = "Apache-2.0"
+edition = "2018"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[features]
+default = [ "dim2", "f64" ]
+dim2    = [ ]
+f64     = [ ]
+serde-serialize = [ "serde", "nalgebra/serde-serialize", "arrayvec/serde" ]
+simd-stable = [ "simba/wide", "simd-is-enabled" ]
+simd-nightly = [ "simba/packed_simd", "simd-is-enabled" ]
+enhanced-determinism = [ "simba/libm_force", "indexmap" ]
+# Do not enable this feature directly. It is automatically
+# enabled with the "simd-stable" or "simd-nightly" feature.
+simd-is-enabled = [ ]
+
+[lib]
+name = "parry2d_f64"
+path = "../../src/lib.rs"
+required-features = [ "dim2", "f64" ]
+
+[dependencies]
+either          = "1"
+bitflags        = "1"
+downcast-rs     = "1"
+num-traits      = { version = "0.2", default-features = false }
+smallvec        = "1"
+slab            = "0.4"
+arrayvec        = "0.7"
+simba           = "0.6"
+nalgebra        = "0.29"
+approx          = { version = "0.5", default-features = false }
+serde           = { version = "1.0", optional = true, features = ["derive"]}
+num-derive      = "0.3"
+indexmap = { version = "1", features = [ "serde-1" ], optional = true }
+rustc-hash = "1"
+
+[dev-dependencies]
+simba = { version = "0.6", features = [ "partial_fixed_point_support" ] }
+oorandom = "11"

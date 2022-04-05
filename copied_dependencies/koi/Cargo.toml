@@ -1,0 +1,60 @@
+[package]
+name = "koi"
+version = "0.1.0"
+edition = "2021"
+license = "Zlib OR Apache-2.0 OR MIT"
+
+[workspace]
+members = ["crates/*"]
+
+[features]
+default = ["audio", "graphics", "renderer", "drawer2d", "imagine_png", "jpeg", "gltf", "ui", "hdri", "physics"]
+SDL = ["kapp/SDL", "kaudio/SDL", "kgraphics/SDL"]
+graphics = ["kgraphics"]
+audio = ["oddio", "kaudio"]
+renderer = []
+drawer2d = []
+xr = []
+jpeg = ["jpeg-decoder"]
+gltf = ["kgltf"]
+ui = ["kui"]
+hdri = ["hdrldr"]
+physics = ["kphysics"]
+imagine_png = ["imagine"]
+tracing_allocator = ["ktracing_allocator"]
+
+[dependencies]
+kapp = {path = "crates/kapp", default-features=false, features=["kserde"]}
+kecs = {path = "crates/kecs"}
+ktasks = {path = "crates/ktasks"}
+kmath = {path = "crates/kmath"}
+klog = {path = "crates/klog"}
+kcolor = {path = "crates/kcolor"}
+kserde = {path = "crates/kserde"}
+
+ktracing_allocator = {path = "crates/ktracing_allocator", optional = true}
+
+kphysics = {path = "crates/kphysics",  optional = true}
+kgraphics = {path = "crates/kgraphics",  optional = true}
+kaudio = {path = "crates/kaudio",  optional = true}
+kgltf = {path = "crates/kgltf", optional = true}
+kui = {path = "crates/kui", optional = true}
+
+oorandom = "11.1.3"
+png = {version = "0.17.0", optional = true}
+jpeg-decoder = {version = "0.1.20", default-features = false, optional = true}
+hdrldr = {version = "0.1.2", optional = true}
+oddio = {git = "https://github.com/Ralith/oddio/", rev = "e496929", optional = true}
+
+imagine = {git="https://github.com/Lokathor/imagine", rev = "da17bf5", optional = true, features = ["png"]}
+bytemuck = {version = "1.7.3", features = ["extern_crate_alloc"]}
+
+[target.'cfg(target_arch="wasm32")'.dependencies]
+kwasm = {path = "crates/kwasm",  version = "0.1.0"}
+
+[profile.dev.package.fontdue]
+opt-level = 3
+
+[[example]]
+name = "xr"
+required-features = ["xr"]

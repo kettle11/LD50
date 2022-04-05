@@ -1,0 +1,30 @@
+[package]
+name = "kapp_platforms"
+version = "0.1.0"
+authors = ["Ian Kettlewell <ian.kettlewell@gmail.com>"]
+edition = "2021"
+license = "Zlib OR Apache-2.0 OR MIT"
+
+[lib]
+
+[dependencies]
+raw-window-handle = "0.4.2"
+kapp_platform_common = { path = "../kapp_platform_common" }
+klog = {path = "../../klog"}
+
+[target.'cfg(not(target_arch="wasm32"))'.dependencies]
+fermium = {version = "20016.1.1", optional = true}
+
+[features]
+default = []
+SDL = ["fermium"]
+wasm_bindgen_support = ["kwasm/wasm_bindgen_support"]
+kserde = ["kapp_platform_common/kserde"]
+
+[target.'cfg(target_os="macos")'.dependencies]
+objc = "0.2.7"
+
+[target.'cfg(target_os="windows")'.dependencies]
+
+[target.'cfg(target_arch="wasm32")'.dependencies]
+kwasm = {path = "../../kwasm"}
