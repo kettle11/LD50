@@ -75,8 +75,8 @@ pub fn get_ui() -> impl Widget<World, StandardContext<World>> {
                 })
                 .try_run(world).unwrap_or_else(|_| String::new())
             })
-                .with_size(|_, _, _| 50.)
-                .with_color(|_, _, _| Color::BLACK.with_lightness(0.3))))
+                .with_size(|_, _, _| 52.)
+                .with_color(|_, _, _| Color::BLACK.with_lightness(0.15))))
         ),
         conditional(
             |world: &mut World, _| {
@@ -122,7 +122,7 @@ pub fn get_ui() -> impl Widget<World, StandardContext<World>> {
                             }
                         })
                         .with_size(|_, _, _| 50.)
-                        .with_color(|_, _, _| Color::BLACK.with_lightness(0.3)),
+                        .with_color(|_, _, _| Color::BLACK.with_lightness(0.15)),
                     ),
                 ),
             )),

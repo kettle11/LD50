@@ -4,6 +4,8 @@ use crate::*;
 pub struct MouseLook {
     mouse_lock: bool,
     pub rotation_sensitivity: f32,
+    yaw: f32, 
+    pitch: f32,
 }
 
 impl MouseLook {
@@ -11,6 +13,8 @@ impl MouseLook {
         Self {
             mouse_lock: false,
             rotation_sensitivity: 0.005,
+            yaw: 0.0,
+            pitch: 0.0,
         }
     }
     pub fn unlock(&mut self, app: &mut KappApplication) {
@@ -32,16 +36,27 @@ impl MouseLook {
                 let mouse_motion = input.mouse_motion();
                 let difference = Vec2::new(mouse_motion.0 as f32, mouse_motion.1 as f32);
 
-                let rotation_around_y = Quaternion::from_angle_axis(
-                    -(difference.x) * mouse_look.rotation_sensitivity,
-                    Vec3::Y,
-                );
-                let rotation_around_x = Quaternion::from_angle_axis(
-                    -(difference.y) * mouse_look.rotation_sensitivity,
-                    Vec3::X,
-                );
+                mouse_look.yaw -= difference.x * mouse_look.rotation_sensitivity;
+                if mouse_look.yaw > std::f32::consts::TAU {
+                    mouse_look.yaw -= std::f32::consts::TAU;
+                }
+                if mouse_look.yaw < 0.0 {
+                    mouse_look.yaw += std::f32::consts::TAU;
+                }
 
-                transform.rotation = rotation_around_y * transform.rotation * rotation_around_x;
+                mouse_look.pitch -= difference.y * mouse_look.rotation_sensitivity;
+                
+                let angle_allowed_looking_up = 0.4;
+                let angle_allowed_looking_down = 0.28;
+
+                if mouse_look.pitch > std::f32::consts::TAU * angle_allowed_looking_up {
+                    mouse_look.pitch = std::f32::consts::TAU * angle_allowed_looking_up
+                }
+                if mouse_look.pitch < -std::f32::consts::TAU * angle_allowed_looking_down {
+                    mouse_look.pitch = -std::f32::consts::TAU * angle_allowed_looking_down
+                }
+
+                transform.rotation = Quat::from_yaw_pitch_roll(mouse_look.yaw, mouse_look.pitch, 0.0);
             }
 
             if input.pointer_button_down(PointerButton::Primary) {

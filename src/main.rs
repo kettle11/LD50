@@ -471,6 +471,7 @@ fn main() {
                                     let mut camera = Camera::new();
                                     camera.clear_color = Some(Color::WHITE);
                                     camera.enabled = false;
+                                    camera.set_near_plane(0.2);
                                     camera
                                 },
                                 CharacterControllerCamera,
@@ -486,7 +487,7 @@ fn main() {
 
                             let character_parent = world.spawn((
                                 player_start_transform,
-                                Collider::Sphere(1.0),
+                                Collider::Sphere(1.3),
                                 RigidBody::new(RigidBodyInner {
                                     kinematic: false,
                                     can_rotate: (false, false, false),
